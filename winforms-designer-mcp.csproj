@@ -13,8 +13,13 @@
     <PackageId>WinFormsDesignerMcp</PackageId>
     <Authors>Peter Elm Wood</Authors>
     <Description>MCP server for WinForms designer file manipulation</Description>
+    <RepositoryUrl>https://github.com/peterelmwood/winforms-designer-mcp.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
   </PropertyGroup>
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
@@ -24,6 +29,9 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.*" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.*" />
     <PackageReference Include="Microsoft.CodeAnalysis.VisualBasic" Version="4.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
   <ItemGroup>
     <Compile Remove="TestData\**" />

@@ -127,6 +127,10 @@ implementations.
 - **`render_form_image`** - Renders the designer file as an SVG wireframe diagram showing all controls at
   their actual positions and sizes, with type-specific colors, icons, and labels. Includes a window title bar
   and container nesting. Can return base64-encoded SVG in the response or save to a file.
+- **`render_form_html`** - Renders the designer file as an interactive HTML page that maps WinForms controls
+  to native HTML elements (buttons, inputs, selects, tables, etc.) positioned at their actual designer
+  coordinates. Includes a collapsible control tree sidebar and a click-to-inspect property panel. Output is
+  a self-contained `.html` file that opens directly in a browser.
 
 ### Validation
 
@@ -210,6 +214,7 @@ Tools/
   LayoutTools.cs                        # place_control, modify_control_property, remove_control
   MetadataTools.cs                      # get_available_control_types, get_control_type_info
   RenderFormTools.cs                    # render_form_image (SVG wireframe)
+  RenderFormHtmlTools.cs                # render_form_html (interactive HTML preview)
   ValidationTools.cs                    # check_accessibility_compliance
 TestData/
   SampleForm.Designer.cs               # C# sample form (5 controls with nesting and events)

@@ -134,6 +134,7 @@ version from the tag automatically.
 | `Tools/LayoutTools.cs` | place_control, modify_control_property, remove_control |
 | `Tools/MetadataTools.cs` | get_available_control_types, get_control_type_info |
 | `Tools/RenderFormTools.cs` | render_form_image (SVG wireframe) |
+| `Tools/RenderFormHtmlTools.cs` | render_form_html (interactive HTML preview) |
 | `Tools/ValidationTools.cs` | check_accessibility_compliance |
 | `.github/workflows/ci.yml` | CI: build + pack on push/PR to main |
 | `.github/workflows/publish.yml` | Publish: NuGet + binaries on version tags |

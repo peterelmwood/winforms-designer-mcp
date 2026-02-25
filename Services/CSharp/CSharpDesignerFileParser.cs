@@ -13,30 +13,38 @@ public class CSharpDesignerFileParser : IDesignerFileParser
 {
     public DesignerLanguage Language => DesignerLanguage.CSharp;
 
-    public async Task<FormModel> ParseAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<FormModel> ParseAsync(
+        string filePath,
+        CancellationToken cancellationToken = default
+    )
     {
         var sourceText = await File.ReadAllTextAsync(filePath, cancellationToken);
         var tree = CSharpSyntaxTree.ParseText(sourceText, cancellationToken: cancellationToken);
         var root = await tree.GetRootAsync(cancellationToken);
 
         // Find the class declaration (the partial form class).
-        var classDecl = root.DescendantNodes()
-            .OfType<ClassDeclarationSyntax>()
-            .FirstOrDefault()
+        var classDecl =
+            root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault()
             ?? throw new InvalidOperationException($"No class declaration found in {filePath}");
 
         // Find namespace.
-        string? ns = classDecl.Ancestors()
+        string? ns = classDecl
+            .Ancestors()
             .OfType<BaseNamespaceDeclarationSyntax>()
-            .FirstOrDefault()?.Name.ToString();
+            .FirstOrDefault()
+            ?.Name.ToString();
 
         // Find InitializeComponent method.
-        var initMethod = classDecl.Members
-            .OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(m => m.Identifier.Text == "InitializeComponent")
-            ?? throw new InvalidOperationException($"No InitializeComponent method found in {filePath}");
+        var initMethod =
+            classDecl
+                .Members.OfType<MethodDeclarationSyntax>()
+                .FirstOrDefault(m => m.Identifier.Text == "InitializeComponent")
+            ?? throw new InvalidOperationException(
+                $"No InitializeComponent method found in {filePath}"
+            );
 
-        var statements = initMethod.Body?.Statements
+        var statements =
+            initMethod.Body?.Statements
             ?? throw new InvalidOperationException("InitializeComponent has no body");
 
         // Phase 1: Extract control declarations (this.x = new Type()).
@@ -45,11 +53,7 @@ public class CSharpDesignerFileParser : IDesignerFileParser
         {
             if (TryParseControlDeclaration(stmt, out var name, out var typeName))
             {
-                controlsByName[name] = new ControlNode
-                {
-                    Name = name,
-                    ControlType = typeName
-                };
+                controlsByName[name] = new ControlNode { Name = name, ControlType = typeName };
             }
         }
 
@@ -92,7 +96,10 @@ public class CSharpDesignerFileParser : IDesignerFileParser
             if (TryParseEventWiring(stmt, out var evtTarget, out var evtName, out var handler))
             {
                 var wiring = new EventWiring { EventName = evtName, HandlerMethodName = handler };
-                if (evtTarget is null || evtTarget.Equals("this", StringComparison.OrdinalIgnoreCase))
+                if (
+                    evtTarget is null
+                    || evtTarget.Equals("this", StringComparison.OrdinalIgnoreCase)
+                )
                 {
                     formEvents.Add(wiring);
                 }
@@ -122,7 +129,7 @@ public class CSharpDesignerFileParser : IDesignerFileParser
             FormProperties = formProperties,
             FormEvents = formEvents,
             Controls = controlsByName.Values.ToList(),
-            RootControls = rootControls
+            RootControls = rootControls,
         };
     }
 
@@ -132,11 +139,15 @@ public class CSharpDesignerFileParser : IDesignerFileParser
     private static bool TryParseControlDeclaration(
         StatementSyntax statement,
         out string controlName,
-        out string typeName)
+        out string typeName
+    )
     {
         controlName = typeName = "";
 
-        if (statement is not ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment })
+        if (
+            statement
+            is not ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment }
+        )
             return false;
 
         // Left side: this.controlName
@@ -163,27 +174,36 @@ public class CSharpDesignerFileParser : IDesignerFileParser
         StatementSyntax statement,
         out string? targetControl,
         out string propertyName,
-        out string valueExpression)
+        out string valueExpression
+    )
     {
         targetControl = null;
         propertyName = valueExpression = "";
 
-        if (statement is not ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment })
-            return false;
-
-        // Skip if right side is object creation (that's a control declaration, handled separately).
-        if (assignment.Right is ObjectCreationExpressionSyntax)
+        if (
+            statement
+            is not ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment }
+        )
             return false;
 
         if (assignment.Left is not MemberAccessExpressionSyntax propAccess)
             return false;
 
+        // Note: we intentionally do NOT skip ObjectCreationExpressionSyntax on the right side.
+        // Control declarations (this.button1 = new Button()) are handled separately by
+        // TryParseControlDeclaration. Allowing them here adds harmless entries to formProperties,
+        // but is necessary to capture form-level properties like:
+        //   this.ClientSize = new Size(284, 261)
+        //   this.Font = new Font("Segoe UI", 9F)
+
         propertyName = propAccess.Name.Identifier.Text;
         valueExpression = assignment.Right.ToString();
 
         // this.controlName.Property = value
-        if (propAccess.Expression is MemberAccessExpressionSyntax innerAccess &&
-            innerAccess.Expression is ThisExpressionSyntax)
+        if (
+            propAccess.Expression is MemberAccessExpressionSyntax innerAccess
+            && innerAccess.Expression is ThisExpressionSyntax
+        )
         {
             targetControl = innerAccess.Name.Identifier.Text;
             return true;
@@ -206,12 +226,16 @@ public class CSharpDesignerFileParser : IDesignerFileParser
     private static bool TryParseControlsAdd(
         StatementSyntax statement,
         out string? parentControl,
-        out string childControl)
+        out string childControl
+    )
     {
         parentControl = null;
         childControl = "";
 
-        if (statement is not ExpressionStatementSyntax { Expression: InvocationExpressionSyntax invocation })
+        if (
+            statement
+            is not ExpressionStatementSyntax { Expression: InvocationExpressionSyntax invocation }
+        )
             return false;
 
         // The method must be ".Controls.Add"
@@ -229,8 +253,10 @@ public class CSharpDesignerFileParser : IDesignerFileParser
             return false;
 
         // Extract parent: this.panel1.Controls or this.Controls
-        if (controlsAccess.Expression is MemberAccessExpressionSyntax parentAccess &&
-            parentAccess.Expression is ThisExpressionSyntax)
+        if (
+            controlsAccess.Expression is MemberAccessExpressionSyntax parentAccess
+            && parentAccess.Expression is ThisExpressionSyntax
+        )
         {
             parentControl = parentAccess.Name.Identifier.Text;
         }
@@ -248,7 +274,10 @@ public class CSharpDesignerFileParser : IDesignerFileParser
             return false;
 
         var arg = invocation.ArgumentList.Arguments[0].Expression;
-        if (arg is MemberAccessExpressionSyntax childAccess && childAccess.Expression is ThisExpressionSyntax)
+        if (
+            arg is MemberAccessExpressionSyntax childAccess
+            && childAccess.Expression is ThisExpressionSyntax
+        )
         {
             childControl = childAccess.Name.Identifier.Text;
             return true;
@@ -265,12 +294,16 @@ public class CSharpDesignerFileParser : IDesignerFileParser
         StatementSyntax statement,
         out string? targetControl,
         out string eventName,
-        out string handlerName)
+        out string handlerName
+    )
     {
         targetControl = null;
         eventName = handlerName = "";
 
-        if (statement is not ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment })
+        if (
+            statement
+            is not ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment }
+        )
             return false;
 
         if (!assignment.IsKind(SyntaxKind.AddAssignmentExpression))
@@ -282,8 +315,10 @@ public class CSharpDesignerFileParser : IDesignerFileParser
 
         eventName = eventAccess.Name.Identifier.Text;
 
-        if (eventAccess.Expression is MemberAccessExpressionSyntax innerAccess &&
-            innerAccess.Expression is ThisExpressionSyntax)
+        if (
+            eventAccess.Expression is MemberAccessExpressionSyntax innerAccess
+            && innerAccess.Expression is ThisExpressionSyntax
+        )
         {
             targetControl = innerAccess.Name.Identifier.Text;
         }
@@ -300,8 +335,10 @@ public class CSharpDesignerFileParser : IDesignerFileParser
         var rightExpr = assignment.Right;
 
         // Unwrap: new EventHandler(this.handler_Click)
-        if (rightExpr is ObjectCreationExpressionSyntax delegateCreation &&
-            delegateCreation.ArgumentList?.Arguments.Count == 1)
+        if (
+            rightExpr is ObjectCreationExpressionSyntax delegateCreation
+            && delegateCreation.ArgumentList?.Arguments.Count == 1
+        )
         {
             rightExpr = delegateCreation.ArgumentList.Arguments[0].Expression;
         }
@@ -328,7 +365,8 @@ public class CSharpDesignerFileParser : IDesignerFileParser
     /// </summary>
     private static void BuildHierarchy(
         Dictionary<string, ControlNode> controls,
-        Dictionary<string, List<string>> parentChildMap)
+        Dictionary<string, List<string>> parentChildMap
+    )
     {
         foreach (var (parentKey, childNames) in parentChildMap)
         {

@@ -13,30 +13,42 @@ public class VbDesignerFileParser : IDesignerFileParser
 {
     public DesignerLanguage Language => DesignerLanguage.VisualBasic;
 
-    public async Task<FormModel> ParseAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<FormModel> ParseAsync(
+        string filePath,
+        CancellationToken cancellationToken = default
+    )
     {
         var sourceText = await File.ReadAllTextAsync(filePath, cancellationToken);
-        var tree = VisualBasicSyntaxTree.ParseText(sourceText, cancellationToken: cancellationToken);
+        var tree = VisualBasicSyntaxTree.ParseText(
+            sourceText,
+            cancellationToken: cancellationToken
+        );
         var root = await tree.GetRootAsync(cancellationToken);
 
         // Find the class declaration.
-        var classBlock = root.DescendantNodes()
-            .OfType<ClassBlockSyntax>()
-            .FirstOrDefault()
+        var classBlock =
+            root.DescendantNodes().OfType<ClassBlockSyntax>().FirstOrDefault()
             ?? throw new InvalidOperationException($"No class declaration found in {filePath}");
 
         var classDecl = classBlock.ClassStatement;
 
         // Find namespace.
-        string? ns = classBlock.Ancestors()
+        string? ns = classBlock
+            .Ancestors()
             .OfType<NamespaceBlockSyntax>()
-            .FirstOrDefault()?.NamespaceStatement.Name.ToString();
+            .FirstOrDefault()
+            ?.NamespaceStatement.Name.ToString();
 
         // Find InitializeComponent method.
-        var initMethod = classBlock.Members
-            .OfType<MethodBlockSyntax>()
-            .FirstOrDefault(m => m.SubOrFunctionStatement.Identifier.Text == "InitializeComponent")
-            ?? throw new InvalidOperationException($"No InitializeComponent method found in {filePath}");
+        var initMethod =
+            classBlock
+                .Members.OfType<MethodBlockSyntax>()
+                .FirstOrDefault(m =>
+                    m.SubOrFunctionStatement.Identifier.Text == "InitializeComponent"
+                )
+            ?? throw new InvalidOperationException(
+                $"No InitializeComponent method found in {filePath}"
+            );
 
         var statements = initMethod.Statements;
 
@@ -46,11 +58,7 @@ public class VbDesignerFileParser : IDesignerFileParser
         {
             if (TryParseControlDeclaration(stmt, out var name, out var typeName))
             {
-                controlsByName[name] = new ControlNode
-                {
-                    Name = name,
-                    ControlType = typeName
-                };
+                controlsByName[name] = new ControlNode { Name = name, ControlType = typeName };
             }
         }
 
@@ -120,7 +128,7 @@ public class VbDesignerFileParser : IDesignerFileParser
             FormProperties = formProperties,
             FormEvents = formEvents,
             Controls = controlsByName.Values.ToList(),
-            RootControls = rootControls
+            RootControls = rootControls,
         };
     }
 
@@ -130,7 +138,8 @@ public class VbDesignerFileParser : IDesignerFileParser
     private static bool TryParseControlDeclaration(
         StatementSyntax statement,
         out string controlName,
-        out string typeName)
+        out string typeName
+    )
     {
         controlName = typeName = "";
 
@@ -161,7 +170,8 @@ public class VbDesignerFileParser : IDesignerFileParser
         StatementSyntax statement,
         out string? targetControl,
         out string propertyName,
-        out string valueExpression)
+        out string valueExpression
+    )
     {
         targetControl = null;
         propertyName = valueExpression = "";
@@ -169,19 +179,24 @@ public class VbDesignerFileParser : IDesignerFileParser
         if (statement is not AssignmentStatementSyntax assignment)
             return false;
 
-        // Skip object creation (control declarations).
-        if (assignment.Right is ObjectCreationExpressionSyntax)
-            return false;
-
         if (assignment.Left is not MemberAccessExpressionSyntax propAccess)
             return false;
+
+        // Note: we intentionally do NOT skip ObjectCreationExpressionSyntax on the right side.
+        // Control declarations (Me.Button1 = New Button()) are handled separately by
+        // TryParseControlDeclaration. Allowing them here adds harmless entries to formProperties,
+        // but is necessary to capture form-level properties like:
+        //   Me.ClientSize = New Size(284, 261)
+        //   Me.Font = New Font("Segoe UI", 9F)
 
         propertyName = propAccess.Name.Identifier.Text;
         valueExpression = assignment.Right.ToString();
 
         // Me.Button1.Property = value
-        if (propAccess.Expression is MemberAccessExpressionSyntax innerAccess &&
-            innerAccess.Expression is MeExpressionSyntax)
+        if (
+            propAccess.Expression is MemberAccessExpressionSyntax innerAccess
+            && innerAccess.Expression is MeExpressionSyntax
+        )
         {
             targetControl = innerAccess.Name.Identifier.Text;
             return true;
@@ -204,7 +219,8 @@ public class VbDesignerFileParser : IDesignerFileParser
     private static bool TryParseControlsAdd(
         StatementSyntax statement,
         out string? parentControl,
-        out string childControl)
+        out string childControl
+    )
     {
         parentControl = null;
         childControl = "";
@@ -212,13 +228,17 @@ public class VbDesignerFileParser : IDesignerFileParser
         // In VB, method calls can be ExpressionStatementSyntax or CallStatementSyntax.
         InvocationExpressionSyntax? invocation = null;
 
-        if (statement is ExpressionStatementSyntax exprStmt &&
-            exprStmt.Expression is InvocationExpressionSyntax inv1)
+        if (
+            statement is ExpressionStatementSyntax exprStmt
+            && exprStmt.Expression is InvocationExpressionSyntax inv1
+        )
         {
             invocation = inv1;
         }
-        else if (statement is CallStatementSyntax callStmt &&
-                 callStmt.Invocation is InvocationExpressionSyntax inv2)
+        else if (
+            statement is CallStatementSyntax callStmt
+            && callStmt.Invocation is InvocationExpressionSyntax inv2
+        )
         {
             invocation = inv2;
         }
@@ -239,8 +259,10 @@ public class VbDesignerFileParser : IDesignerFileParser
             return false;
 
         // Parent: Me.Panel1.Controls or Me.Controls
-        if (controlsAccess.Expression is MemberAccessExpressionSyntax parentAccess &&
-            parentAccess.Expression is MeExpressionSyntax)
+        if (
+            controlsAccess.Expression is MemberAccessExpressionSyntax parentAccess
+            && parentAccess.Expression is MeExpressionSyntax
+        )
         {
             parentControl = parentAccess.Name.Identifier.Text;
         }
@@ -258,7 +280,10 @@ public class VbDesignerFileParser : IDesignerFileParser
             return false;
 
         var arg = invocation.ArgumentList.Arguments[0].GetExpression();
-        if (arg is MemberAccessExpressionSyntax childAccess && childAccess.Expression is MeExpressionSyntax)
+        if (
+            arg is MemberAccessExpressionSyntax childAccess
+            && childAccess.Expression is MeExpressionSyntax
+        )
         {
             childControl = childAccess.Name.Identifier.Text;
             return true;
@@ -274,7 +299,8 @@ public class VbDesignerFileParser : IDesignerFileParser
         StatementSyntax statement,
         out string? targetControl,
         out string eventName,
-        out string handlerName)
+        out string handlerName
+    )
     {
         targetControl = null;
         eventName = handlerName = "";
@@ -291,8 +317,10 @@ public class VbDesignerFileParser : IDesignerFileParser
 
         eventName = eventAccess.Name.Identifier.Text;
 
-        if (eventAccess.Expression is MemberAccessExpressionSyntax innerAccess &&
-            innerAccess.Expression is MeExpressionSyntax)
+        if (
+            eventAccess.Expression is MemberAccessExpressionSyntax innerAccess
+            && innerAccess.Expression is MeExpressionSyntax
+        )
         {
             targetControl = innerAccess.Name.Identifier.Text;
         }
@@ -307,7 +335,12 @@ public class VbDesignerFileParser : IDesignerFileParser
 
         // Handler: AddressOf Me.Button1_Click
         var delegateExpr = addHandler.DelegateExpression;
-        if (delegateExpr is UnaryExpressionSyntax { Operand: MemberAccessExpressionSyntax handlerAccess })
+        if (
+            delegateExpr is UnaryExpressionSyntax
+            {
+                Operand: MemberAccessExpressionSyntax handlerAccess
+            }
+        )
         {
             handlerName = handlerAccess.Name.Identifier.Text;
             return true;
@@ -324,7 +357,8 @@ public class VbDesignerFileParser : IDesignerFileParser
 
     private static void BuildHierarchy(
         Dictionary<string, ControlNode> controls,
-        Dictionary<string, List<string>> parentChildMap)
+        Dictionary<string, List<string>> parentChildMap
+    )
     {
         foreach (var (parentKey, childNames) in parentChildMap)
         {

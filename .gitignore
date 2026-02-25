@@ -131,3 +131,9 @@ $RECYCLE.BIN/
 .DS_Store
 
 _NCrunch*
+
+# Visual Studio Code workspace settings
+.vscode/
+
+# Visual Studio configuration files
+.vs/

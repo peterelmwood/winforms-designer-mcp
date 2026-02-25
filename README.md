@@ -95,6 +95,12 @@ implementations.
 - **`get_control_type_info`** - Returns detailed metadata for a specific control type: common properties with their
   types and descriptions, common events, and usage notes.
 
+### Visualization
+
+- **`render_form_image`** - Renders the designer file as an SVG wireframe diagram showing all controls at
+  their actual positions and sizes, with type-specific colors, icons, and labels. Includes a window title bar
+  and container nesting. Can return base64-encoded SVG in the response or save to a file.
+
 ### Validation
 
 - **`check_accessibility_compliance`** - Scans the form for accessibility issues: missing `AccessibleName`,
@@ -105,7 +111,6 @@ implementations.
 
 The following tools from the original design are planned for future implementation:
 
-- **`capture_form_screenshot`** - Render the form off-screen via `DrawToBitmap()` and return a base64 image.
 - **`align_controls`** - High-level alignment tool (Top, Middle, DistributeVertically, etc.).
 - **`apply_docking_and_anchoring`** - Set responsive resize behavior without knowing bitwise enums.
 - **`create_event_handler`** - Scaffold a C#/VB.NET event handler in the code-behind and wire it in the designer.
@@ -139,6 +144,7 @@ Tools/
   VisualTreeTools.cs                    # list_controls, get_control_properties, parse_designer_file
   LayoutTools.cs                        # place_control, modify_control_property, remove_control
   MetadataTools.cs                      # get_available_control_types, get_control_type_info
+  RenderFormTools.cs                    # render_form_image (SVG wireframe)
   ValidationTools.cs                    # check_accessibility_compliance
 TestData/
   SampleForm.Designer.cs               # C# sample form (5 controls with nesting and events)

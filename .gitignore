@@ -68,6 +68,9 @@ _ReSharper*/
 # Click-Once directory
 publish/
 
+# Pack output
+artifacts/
+
 # Publish Web Output
 *.Publish.xml
 *.pubxml

@@ -21,6 +21,33 @@ dotnet build
 dotnet run
 ```
 
+## Installation
+
+### As a .NET global tool (from NuGet)
+
+```bash
+dotnet tool install -g WinFormsDesignerMcp
+```
+
+Then configure your MCP client to use the tool command directly:
+
+```json
+{ "command": "winforms-designer-mcp" }
+```
+
+### As a self-contained binary (from GitHub Releases)
+
+Download the archive for your platform from the
+[Releases](https://github.com/<owner>/winforms-designer-mcp/releases) page:
+
+| Platform | Archive |
+|---|---|
+| Windows x64 | `winforms-designer-mcp-win-x64.tar.gz` |
+| Linux x64 | `winforms-designer-mcp-linux-x64.tar.gz` |
+| macOS ARM64 | `winforms-designer-mcp-osx-arm64.tar.gz` |
+
+Extract, then point your MCP client at the binary path. No .NET SDK required.
+
 ## Connecting to an MCP Client
 
 ### Claude Desktop
@@ -121,10 +148,48 @@ The following tools from the original design are planned for future implementati
 - **`render_form_ascii`** - Generate a text approximation of the form layout for spatial reasoning.
 - **`search_component_docs`** - Provide documentation snippets for WinForms controls and libraries.
 
+## Packaging & Releasing
+
+The project is configured as a [.NET tool](https://learn.microsoft.com/dotnet/core/tools/global-tools) and
+includes GitHub Actions workflows for CI and publishing.
+
+### Local packaging
+
+```bash
+# Pack a NuGet tool package
+dotnet pack -c Release -o ./artifacts
+
+# Install locally for testing
+dotnet tool install -g --add-source ./artifacts WinFormsDesignerMcp
+
+# Build a self-contained binary for a specific platform
+dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o ./publish
+```
+
+### Versioning
+
+The version is set in the `<Version>` property in the `.csproj`. During CI, the publish workflow derives the
+version automatically from the git tag (e.g., tag `v1.2.3` → version `1.2.3`).
+
+### Publishing a release
+
+1. Update the `<Version>` in `winforms-designer-mcp.csproj` if desired (CI overrides it from the tag).
+2. Commit and push to `main`.
+3. Tag the commit: `git tag v1.2.3 && git push origin v1.2.3`
+4. The **Publish** workflow will:
+   - Build and push the NuGet package to nuget.org (requires `NUGET_API_KEY` secret).
+   - Build self-contained binaries for Windows x64, Linux x64, and macOS ARM64.
+   - Create a GitHub Release with the binaries attached.
+
+### CI
+
+The **CI** workflow runs on every push/PR to `main`: build, pack, and upload the `.nupkg` as an artifact.
+
 ## Project Structure
 
 ```text
 Program.cs                              # MCP server entry point (stdio transport)
+AGENTS.md                              # Agent instructions for AI coding assistants
 Models/
   FormModel.cs                          # Language-agnostic form representation
   ControlNode.cs                        # Control tree node (properties, children, events)
@@ -149,6 +214,10 @@ Tools/
 TestData/
   SampleForm.Designer.cs               # C# sample form (5 controls with nesting and events)
   SampleForm.Designer.vb               # Equivalent VB.NET sample form
+.github/
+  workflows/
+    ci.yml                              # Build + pack on push/PR to main
+    publish.yml                         # NuGet + self-contained binaries on version tags
 ```
 
 ## Dependencies

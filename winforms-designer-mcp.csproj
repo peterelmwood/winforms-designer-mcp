@@ -5,6 +5,10 @@
     <RootNamespace>WinFormsDesignerMcp</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Pre-compile assemblies for faster cold start (applies to dotnet publish). -->
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <!-- Enable tiered PGO for faster steady-state after startup. -->
+    <TieredPGO>true</TieredPGO>
   </PropertyGroup>
   <PropertyGroup>
     <PackAsTool>true</PackAsTool>

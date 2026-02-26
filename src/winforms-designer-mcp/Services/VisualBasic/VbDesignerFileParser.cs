@@ -52,11 +52,29 @@ public class VbDesignerFileParser : IDesignerFileParser
 
         var statements = initMethod.Statements;
 
+        // Collect field names declared in the class so we can distinguish real control
+        // declarations (Me.Button1 = New Button()) from form-level property assignments
+        // that also use 'New' (Me.ClientSize = New Size(...)).
+        var fieldNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var field in classBlock.Members.OfType<FieldDeclarationSyntax>())
+        {
+            foreach (var declarator in field.Declarators)
+            {
+                foreach (var modifiedId in declarator.Names)
+                {
+                    fieldNames.Add(modifiedId.Identifier.Text);
+                }
+            }
+        }
+
         // Phase 1: Extract control declarations (Me.X = New Type()).
         var controlsByName = new Dictionary<string, ControlNode>(StringComparer.OrdinalIgnoreCase);
         foreach (var stmt in statements)
         {
-            if (TryParseControlDeclaration(stmt, out var name, out var typeName))
+            if (
+                TryParseControlDeclaration(stmt, out var name, out var typeName)
+                && fieldNames.Contains(name)
+            )
             {
                 controlsByName[name] = new ControlNode { Name = name, ControlType = typeName };
             }

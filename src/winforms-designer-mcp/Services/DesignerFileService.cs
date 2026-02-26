@@ -8,7 +8,8 @@ namespace WinFormsDesignerMcp.Services;
 /// </summary>
 public class DesignerFileService(
     IEnumerable<IDesignerFileParser> parsers,
-    IEnumerable<IDesignerFileWriter> writers)
+    IEnumerable<IDesignerFileWriter> writers
+)
 {
     private readonly Dictionary<DesignerLanguage, IDesignerFileParser> _parsers =
         parsers.ToDictionary(p => p.Language);
@@ -19,7 +20,10 @@ public class DesignerFileService(
     /// <summary>
     /// Detect the language from the file extension and parse the designer file.
     /// </summary>
-    public Task<FormModel> ParseAsync(string filePath, CancellationToken cancellationToken = default)
+    public Task<FormModel> ParseAsync(
+        string filePath,
+        CancellationToken cancellationToken = default
+    )
     {
         var language = DetectLanguage(filePath);
         if (!_parsers.TryGetValue(language, out var parser))
@@ -30,7 +34,11 @@ public class DesignerFileService(
     /// <summary>
     /// Detect the language from the file extension and write the model back.
     /// </summary>
-    public Task WriteAsync(string filePath, FormModel model, CancellationToken cancellationToken = default)
+    public Task WriteAsync(
+        string filePath,
+        FormModel model,
+        CancellationToken cancellationToken = default
+    )
     {
         var language = DetectLanguage(filePath);
         if (!_writers.TryGetValue(language, out var writer))
@@ -43,14 +51,20 @@ public class DesignerFileService(
     /// </summary>
     public static DesignerLanguage DetectLanguage(string filePath)
     {
-        if (filePath.EndsWith(".Designer.cs", StringComparison.OrdinalIgnoreCase) ||
-            filePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+        if (
+            filePath.EndsWith(".Designer.cs", StringComparison.OrdinalIgnoreCase)
+            || filePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+        )
             return DesignerLanguage.CSharp;
 
-        if (filePath.EndsWith(".Designer.vb", StringComparison.OrdinalIgnoreCase) ||
-            filePath.EndsWith(".vb", StringComparison.OrdinalIgnoreCase))
+        if (
+            filePath.EndsWith(".Designer.vb", StringComparison.OrdinalIgnoreCase)
+            || filePath.EndsWith(".vb", StringComparison.OrdinalIgnoreCase)
+        )
             return DesignerLanguage.VisualBasic;
 
-        throw new ArgumentException($"Cannot determine designer language from file path: {filePath}");
+        throw new ArgumentException(
+            $"Cannot determine designer language from file path: {filePath}"
+        );
     }
 }

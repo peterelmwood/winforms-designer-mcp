@@ -59,7 +59,7 @@ jobs:
 
             - name: Publish self-contained
               run: >
-                  dotnet publish -c Release
+                  dotnet publish src/winforms-designer-mcp/winforms-designer-mcp.csproj -c Release
                   -r ${{ matrix.rid }}
                   --self-contained
                   -p:PublishSingleFile=true

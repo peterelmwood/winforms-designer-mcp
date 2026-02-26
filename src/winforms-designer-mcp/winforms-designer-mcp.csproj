@@ -26,7 +26,7 @@
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
   </PropertyGroup>
   <ItemGroup>
-    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="../../README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="ModelContextProtocol" Version="1.*-*" />
@@ -41,5 +41,6 @@
   <ItemGroup>
     <Compile Remove="TestData\**" />
     <None Include="TestData\**" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="Templates\FormPreview.html" />
   </ItemGroup>
 </Project>

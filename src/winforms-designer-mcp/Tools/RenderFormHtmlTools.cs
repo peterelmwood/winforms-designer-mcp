@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Globalization;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -13,10 +14,14 @@ namespace WinFormsDesignerMcp.Tools;
 /// <summary>
 /// MCP tool that renders a WinForms designer file as an interactive HTML page
 /// with native HTML form elements, a control tree sidebar, and a property inspector.
+/// The HTML shell, CSS, and JavaScript live in Templates/FormPreview.html (embedded resource).
+/// This class generates the dynamic fragments and substitutes them into the template.
 /// </summary>
 [McpServerToolType]
 public partial class RenderFormHtmlTools
 {
+    private const string TemplateResourceName = "WinFormsDesignerMcp.Templates.FormPreview.html";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -48,86 +53,32 @@ public partial class RenderFormHtmlTools
             .FormProperties.GetValueOrDefault("Text", $"\"{model.FormName}\"")
             .Trim('"');
 
-        var sb = new StringBuilder();
+        // Generate the dynamic HTML fragments.
+        var treeNodesSb = new StringBuilder();
+        RenderTreeNodes(treeNodesSb, model.RootControls, 8);
 
-        // Build complete self-contained HTML page.
-        sb.AppendLine("<!DOCTYPE html>");
-        sb.AppendLine("<html lang=\"en\">");
-        sb.AppendLine("<head>");
-        sb.AppendLine("<meta charset=\"UTF-8\">");
-        sb.AppendLine("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">");
-        sb.AppendLine($"<title>{Esc(formTitle)} — WinForms Designer Preview</title>");
-        AppendStyles(sb);
-        sb.AppendLine("</head>");
-        sb.AppendLine("<body>");
+        var controlsSb = new StringBuilder();
+        RenderHtmlControls(controlsSb, model.RootControls, 8);
 
-        // Header bar.
-        sb.AppendLine("<header id=\"header\">");
-        sb.AppendLine(
-            $"  <span class=\"header-title\">WinForms Designer Preview &mdash; {Esc(formTitle)}</span>"
-        );
-        sb.AppendLine(
-            "  <label class=\"header-toggle\"><input type=\"checkbox\" id=\"toggle-visible\" /> Respect Visible</label>"
-        );
-        sb.AppendLine(
-            $"  <span class=\"header-info\">{model.Controls.Count} controls &middot; {model.Language} &middot; {Esc(Path.GetFileName(filePath))}</span>"
-        );
-        sb.AppendLine("</header>");
+        var jsonSb = new StringBuilder();
+        EmitControlDataJson(jsonSb, model);
 
-        // Main layout: sidebar + canvas area.
-        sb.AppendLine("<div id=\"main\">");
+        // Load the template and perform token substitution.
+        var template = LoadTemplate();
+        var html = template
+            .Replace("{{FORM_TITLE}}", Esc(formTitle))
+            .Replace("{{FORM_WIDTH}}", formWidth.ToString(CultureInfo.InvariantCulture))
+            .Replace("{{FORM_HEIGHT}}", formHeight.ToString(CultureInfo.InvariantCulture))
+            .Replace(
+                "{{CONTROL_COUNT}}",
+                model.Controls.Count.ToString(CultureInfo.InvariantCulture)
+            )
+            .Replace("{{LANGUAGE}}", Esc(model.Language.ToString()))
+            .Replace("{{FILE_NAME}}", Esc(Path.GetFileName(filePath)))
+            .Replace("{{TREE_NODES}}", treeNodesSb.ToString())
+            .Replace("{{CONTROLS_HTML}}", controlsSb.ToString())
+            .Replace("{{CONTROL_DATA_JSON}}", jsonSb.ToString());
 
-        // Sidebar: control tree.
-        sb.AppendLine("  <aside id=\"sidebar\">");
-        sb.AppendLine("    <div class=\"sidebar-section\">");
-        sb.AppendLine("      <h3>Control Tree</h3>");
-        sb.AppendLine("      <ul class=\"tree\">");
-        RenderTreeNodes(sb, model.RootControls, 8);
-        sb.AppendLine("      </ul>");
-        sb.AppendLine("    </div>");
-        sb.AppendLine("    <div class=\"sidebar-section\" id=\"property-panel\">");
-        sb.AppendLine("      <h3>Properties</h3>");
-        sb.AppendLine("      <p class=\"hint\">Click a control to inspect its properties.</p>");
-        sb.AppendLine("    </div>");
-        sb.AppendLine("  </aside>");
-
-        // Canvas area: form window.
-        sb.AppendLine("  <div id=\"canvas-area\">");
-        sb.AppendLine($"    <div class=\"form-window\" style=\"width:{formWidth}px;\">");
-
-        // Title bar.
-        sb.AppendLine("      <div class=\"form-titlebar\">");
-        sb.AppendLine($"        <span class=\"form-titlebar-text\">{Esc(formTitle)}</span>");
-        sb.AppendLine("        <span class=\"form-titlebar-buttons\">");
-        sb.AppendLine("          <span class=\"tb-btn minimize\">&#x2013;</span>");
-        sb.AppendLine("          <span class=\"tb-btn maximize\">&#x25A1;</span>");
-        sb.AppendLine("          <span class=\"tb-btn close\">&#x2715;</span>");
-        sb.AppendLine("        </span>");
-        sb.AppendLine("      </div>");
-
-        // Client area.
-        sb.AppendLine(
-            $"      <div class=\"form-client\" style=\"width:{formWidth}px;height:{formHeight}px;\">"
-        );
-        RenderHtmlControls(sb, model.RootControls, 8);
-        sb.AppendLine("      </div>");
-
-        sb.AppendLine("    </div>"); // form-window
-        sb.AppendLine("  </div>"); // canvas-area
-        sb.AppendLine("</div>"); // main
-
-        // Embed control data as JSON for the property inspector.
-        sb.AppendLine("<script>");
-        sb.AppendLine("const controlData = {");
-        EmitControlDataJson(sb, model);
-        sb.AppendLine("};");
-        AppendScript(sb);
-        sb.AppendLine("</script>");
-
-        sb.AppendLine("</body>");
-        sb.AppendLine("</html>");
-
-        var html = sb.ToString();
         await File.WriteAllTextAsync(outputPath, html, cancellationToken);
 
         return JsonSerializer.Serialize(
@@ -143,6 +94,29 @@ public partial class RenderFormHtmlTools
             },
             JsonOptions
         );
+    }
+
+    // ─── Template loading ────────────────────────────────────────────────
+
+    private static string? s_cachedTemplate;
+
+    /// <summary>
+    /// Load the HTML template from the embedded resource. Cached after first load.
+    /// </summary>
+    private static string LoadTemplate()
+    {
+        if (s_cachedTemplate is not null)
+            return s_cachedTemplate;
+
+        var assembly = Assembly.GetExecutingAssembly();
+        using var stream =
+            assembly.GetManifestResourceStream(TemplateResourceName)
+            ?? throw new InvalidOperationException(
+                $"Embedded resource '{TemplateResourceName}' not found."
+            );
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        s_cachedTemplate = reader.ReadToEnd();
+        return s_cachedTemplate;
     }
 
     // ─── HTML control rendering ──────────────────────────────────────────
@@ -517,336 +491,6 @@ public partial class RenderFormHtmlTools
             sb.Append($"\"{EscJs(key)}\": \"{EscJs(value)}\"");
             first = false;
         }
-    }
-
-    // ─── Inline CSS ──────────────────────────────────────────────────────
-
-    private static void AppendStyles(StringBuilder sb)
-    {
-        sb.AppendLine("<style>");
-        sb.AppendLine(
-            """
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; font-size: 13px;
-  background: #1e1e1e; color: #d4d4d4; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-
-/* Header */
-#header { background: #252526; border-bottom: 1px solid #333; padding: 8px 16px;
-  display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
-.header-title { font-weight: 600; color: #e0e0e0; }
-.header-toggle { display: flex; align-items: center; gap: 6px; color: #ccc; font-size: 12px;
-  cursor: pointer; user-select: none; }
-.header-toggle input { cursor: pointer; }
-.header-info { font-size: 11px; color: #888; }
-
-/* Visible property toggle — hides controls with Visible=False (cascades via DOM nesting) */
-body.respect-visible .ctrl[data-visible="false"] { display: none !important; }
-
-/* Main layout */
-#main { display: flex; flex: 1; overflow: hidden; }
-
-/* Sidebar */
-#sidebar { width: 280px; min-width: 200px; background: #252526; border-right: 1px solid #333;
-  overflow-y: auto; flex-shrink: 0; display: flex; flex-direction: column; }
-.sidebar-section { padding: 12px; border-bottom: 1px solid #333; }
-.sidebar-section h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
-  color: #888; margin-bottom: 8px; }
-.hint { color: #666; font-size: 11px; font-style: italic; }
-
-/* Tree */
-.tree { list-style: none; padding-left: 14px; }
-.tree-node { cursor: pointer; padding: 2px 0; }
-.tree-label { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px;
-  border-radius: 3px; user-select: none; }
-.tree-label:hover { background: #2a2d2e; }
-.tree-node.selected > .tree-label { background: #094771; color: #fff; }
-.tn-name { color: #dcdcaa; }
-.tn-type { color: #4ec9b0; font-size: 11px; }
-.toggle { display: inline-block; font-size: 9px; width: 12px; transition: transform 0.15s; }
-.tree-node.expanded > .tree-label .toggle { transform: rotate(90deg); }
-.tree-node.has-children > ul { display: none; }
-.tree-node.has-children.expanded > ul { display: block; }
-
-/* Property panel */
-#property-panel table { width: 100%; border-collapse: collapse; }
-#property-panel th, #property-panel td { text-align: left; padding: 3px 6px;
-  border-bottom: 1px solid #333; font-size: 12px; vertical-align: top; }
-#property-panel th { color: #888; width: 40%; white-space: nowrap; }
-#property-panel td { color: #ce9178; word-break: break-all; }
-#property-panel tr.event th { color: #569cd6; }
-#property-panel tr.event td { color: #dcdcaa; }
-
-/* Canvas area */
-#canvas-area { flex: 1; overflow: auto; padding: 32px; display: flex;
-  justify-content: center; align-items: flex-start; }
-
-/* Form window */
-.form-window { background: #f0f0f0; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-  overflow: hidden; flex-shrink: 0; }
-.form-titlebar { background: linear-gradient(180deg, #0078d4, #005fa3); color: white;
-  height: 32px; display: flex; align-items: center; justify-content: space-between;
-  padding: 0 8px; user-select: none; }
-.form-titlebar-text { font-size: 12px; font-weight: 500; }
-.form-titlebar-buttons { display: flex; gap: 2px; }
-.tb-btn { width: 28px; height: 22px; display: flex; align-items: center; justify-content: center;
-  border-radius: 3px; font-size: 11px; cursor: default; }
-.tb-btn:hover { background: rgba(255,255,255,0.15); }
-.tb-btn.close:hover { background: #e81123; }
-
-/* Client area */
-.form-client { position: relative; background: #f0f0f0; font-family: 'Segoe UI', sans-serif;
-  font-size: 12px; color: #1e1e1e; overflow: hidden; }
-
-/* Controls — base */
-.ctrl { position: absolute; overflow: visible; transition: outline 0.1s; }
-.ctrl-textbox, .ctrl-richtextbox, .ctrl-listbox, .ctrl-datagridview,
-.ctrl-treeview, .ctrl-listview, .ctrl-picturebox { overflow: hidden; }
-.ctrl:hover { outline: 2px solid #0078d4; outline-offset: -1px; cursor: pointer; }
-.ctrl.highlighted { outline: 2px solid #ff0; outline-offset: -1px; }
-
-/* Button */
-.ctrl-button { background: #e1e1e1; border: 1px solid #adadad; border-radius: 3px;
-  display: flex; align-items: center; justify-content: center; }
-.native-btn { width: 100%; height: 100%; border: none; background: transparent;
-  font: inherit; cursor: default; padding: 0 8px; }
-
-/* TextBox / NumericUpDown / DateTimePicker */
-.ctrl-textbox, .ctrl-numericupdown, .ctrl-datetimepicker {
-  background: #fff; border: 1px solid #7a7a7a; }
-.native-input { width: 100%; height: 100%; border: none; background: transparent;
-  font: inherit; padding: 2px 4px; outline: none; }
-
-/* RichTextBox */
-.ctrl-richtextbox { background: #fff; border: 1px solid #7a7a7a; }
-.native-textarea { width: 100%; height: 100%; border: none; background: transparent;
-  font: inherit; padding: 2px 4px; outline: none; resize: none; }
-
-/* Label */
-.ctrl-label { background: transparent; display: flex; align-items: center; }
-.native-label { padding: 0 2px; }
-
-/* ComboBox */
-.ctrl-combobox { background: #fff; border: 1px solid #7a7a7a; }
-.native-select { width: 100%; height: 100%; border: none; background: transparent;
-  font: inherit; padding: 0 4px; outline: none; appearance: auto; }
-
-/* ListBox */
-.ctrl-listbox { background: #fff; border: 1px solid #7a7a7a; }
-.native-listbox { width: 100%; height: 100%; border: none; background: transparent;
-  font: inherit; padding: 0; outline: none; }
-
-/* CheckBox / RadioButton */
-.ctrl-checkbox, .ctrl-radiobutton { background: transparent; display: flex; align-items: center; }
-.native-check, .native-radio { display: flex; align-items: center; gap: 4px;
-  font: inherit; cursor: default; white-space: nowrap; }
-
-/* ProgressBar */
-.ctrl-progressbar { background: #e6e6e6; border: 1px solid #bcbcbc; }
-.native-progress { display: block; }
-
-/* DataGridView */
-.ctrl-datagridview { background: #fff; border: 1px solid #7a7a7a; overflow: auto; }
-.native-datagrid { width: 100%; border-collapse: collapse; font-size: 11px; }
-.native-datagrid th { background: #f0f0f0; border: 1px solid #d0d0d0; padding: 4px 8px;
-  font-weight: 500; text-align: left; position: sticky; top: 0; }
-.native-datagrid td { border: 1px solid #e0e0e0; padding: 4px 8px; height: 22px; }
-
-/* TreeView */
-.ctrl-treeview { background: #fff; border: 1px solid #7a7a7a; overflow: auto; padding: 4px; }
-.native-treeview { font-size: 12px; }
-.tv-item { padding: 2px 4px; }
-.tv-item.indent { padding-left: 20px; }
-
-/* ListView */
-.ctrl-listview { background: #fff; border: 1px solid #7a7a7a; overflow: auto; }
-.native-listview { font-size: 12px; }
-.lv-header { background: #f0f0f0; border-bottom: 1px solid #d0d0d0; padding: 4px 8px; font-weight: 500; }
-.lv-row { padding: 3px 8px; border-bottom: 1px solid #f0f0f0; }
-
-/* PictureBox */
-.ctrl-picturebox { background: #e0e0e0; border: 1px solid #ababab; display: flex;
-  align-items: center; justify-content: center; }
-.native-picturebox { color: #888; font-size: 12px; text-align: center; }
-
-/* GroupBox */
-.ctrl-groupbox { background: transparent; border: 1px solid #999; border-radius: 3px; padding-top: 4px; }
-.native-groupbox { border: none; padding: 0; margin: 0; position: absolute; top: -10px;
-  left: 6px; font-size: 12px; }
-.native-groupbox legend { padding: 0 4px; color: #333; }
-
-/* TabControl */
-.ctrl-tabcontrol { background: #f0f0f0; border: 1px solid #999; }
-.native-tabcontrol { height: 100%; }
-.tab-header { display: flex; border-bottom: 1px solid #999; background: #e0e0e0; }
-.tab { padding: 4px 12px; border-right: 1px solid #ccc; cursor: pointer; font-size: 11px;
-  user-select: none; }
-.tab:hover { background: #d0d0d0; }
-.tab.active { background: #f0f0f0; border-bottom: 1px solid #f0f0f0; }
-.tab.active:hover { background: #f0f0f0; }
-
-/* Panel and container types */
-.ctrl-panel, .ctrl-splitcontainer, .ctrl-flowlayoutpanel, .ctrl-tablelayoutpanel,
-.ctrl-tabpage {
-  background: rgba(0,0,0,0.02); border: 1px dashed #bbb; overflow: hidden; }
-.container-label { position: absolute; top: 2px; left: 4px; font-size: 9px;
-  color: #999; pointer-events: none; }
-
-/* MenuStrip */
-.ctrl-menustrip { background: #f0f0f0; border-bottom: 1px solid #d0d0d0; display: flex; align-items: center; }
-.native-menustrip { display: flex; height: 100%; align-items: center; }
-.menu-item { padding: 4px 10px; cursor: default; font-size: 12px; }
-.menu-item:hover { background: #e0e0e0; }
-
-/* ToolStrip */
-.ctrl-toolstrip { background: #f0f0f0; border-bottom: 1px solid #d0d0d0; display: flex; align-items: center; }
-.native-toolstrip { display: flex; height: 100%; align-items: center; gap: 2px; padding: 0 4px; }
-.tool-btn { padding: 2px 6px; cursor: default; }
-
-/* StatusStrip */
-.ctrl-statusstrip { background: #007acc; color: #fff; display: flex; align-items: center; }
-.native-statusstrip { display: flex; height: 100%; align-items: center; padding: 0 8px; }
-.status-text { font-size: 11px; }
-
-/* Generic fallback */
-.generic-ctrl { display: flex; flex-direction: column; align-items: center; justify-content: center;
-  height: 100%; color: #666; text-align: center; background: #f5f5f5; border: 1px solid #ccc; border-radius: 3px; }
-"""
-        );
-        sb.AppendLine("</style>");
-    }
-
-    // ─── Inline JavaScript ───────────────────────────────────────────────
-
-    private static void AppendScript(StringBuilder sb)
-    {
-        sb.AppendLine(
-            """
-// Visible property toggle — adds/removes body class to hide controls with Visible=False.
-// Invisibility cascades to children via DOM nesting (parent hidden = children hidden).
-document.getElementById('toggle-visible').addEventListener('change', e => {
-  document.body.classList.toggle('respect-visible', e.target.checked);
-});
-
-// Tree toggle — also select the control so tab pages switch when clicked.
-document.querySelectorAll('.tree-node.has-children > .tree-label').forEach(label => {
-  label.addEventListener('click', e => {
-    e.stopPropagation();
-    const node = label.parentElement;
-    node.classList.toggle('expanded');
-    selectControl(node.dataset.target);
-  });
-});
-
-// Tab switching — show the target tab page, hide its siblings.
-function switchTab(tabPageName) {
-  const tabPage = document.querySelector(`.ctrl-tabpage[data-name="${tabPageName}"]`);
-  if (!tabPage) return;
-  const parent = tabPage.parentElement;
-  if (!parent) return;
-  // Toggle visibility of sibling tab pages.
-  parent.querySelectorAll(':scope > .ctrl-tabpage').forEach(tp => {
-    tp.style.display = tp.dataset.name === tabPageName ? '' : 'none';
-  });
-  // Update active tab header.
-  parent.querySelectorAll('.tab[data-tab-target]').forEach(tab => {
-    tab.classList.toggle('active', tab.dataset.tabTarget === tabPageName);
-  });
-}
-
-// Ensure a control's ancestor tab pages are all visible.
-function ensureVisible(element) {
-  if (!element) return;
-  // Collect ancestor tab pages from innermost to outermost.
-  const ancestors = [];
-  let el = element.closest('.ctrl-tabpage');
-  while (el) {
-    ancestors.push(el);
-    el = el.parentElement?.closest('.ctrl-tabpage');
-  }
-  // Switch from outermost to innermost so parent tabs are visible first.
-  for (let i = ancestors.length - 1; i >= 0; i--) {
-    switchTab(ancestors[i].dataset.name);
-  }
-}
-
-// Tab header click handlers.
-document.querySelectorAll('.tab[data-tab-target]').forEach(tab => {
-  tab.addEventListener('click', e => {
-    e.stopPropagation();
-    switchTab(tab.dataset.tabTarget);
-  });
-});
-
-// Control click — highlight + show properties
-function selectControl(name) {
-  // Remove previous highlights.
-  document.querySelectorAll('.ctrl.highlighted, .tree-node.selected').forEach(el => {
-    el.classList.remove('highlighted', 'selected');
-  });
-
-  // Highlight control in canvas.
-  const ctrl = document.querySelector(`.ctrl[data-name="${name}"]`);
-  if (ctrl) {
-    // Make sure any ancestor tab pages are visible.
-    ensureVisible(ctrl);
-    // If this IS a tab page, switch to it.
-    if (ctrl.classList.contains('ctrl-tabpage')) {
-      switchTab(name);
-    }
-    ctrl.classList.add('highlighted');
-    ctrl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
-
-  // Highlight tree node.
-  const treeNode = document.querySelector(`.tree-node[data-target="${name}"]`);
-  if (treeNode) {
-    treeNode.classList.add('selected');
-    // Expand parents.
-    let parent = treeNode.parentElement?.closest('.tree-node');
-    while (parent) {
-      parent.classList.add('expanded');
-      parent = parent.parentElement?.closest('.tree-node');
-    }
-  }
-
-  // Show properties.
-  const panel = document.getElementById('property-panel');
-  const data = controlData[name];
-  if (!data) {
-    panel.innerHTML = '<h3>Properties</h3><p class="hint">No data for ' + name + '</p>';
-    return;
-  }
-
-  let html = '<h3>' + name + '</h3><table>';
-  for (const [key, value] of Object.entries(data)) {
-    const isEvent = key.startsWith('Event:');
-    const displayKey = isEvent ? key.substring(6) : key;
-    html += `<tr class="${isEvent ? 'event' : ''}"><th>${displayKey}</th><td>${value}</td></tr>`;
-  }
-  html += '</table>';
-  panel.innerHTML = html;
-}
-
-// Click handlers on controls in canvas.
-document.querySelectorAll('.ctrl').forEach(el => {
-  el.addEventListener('click', e => {
-    e.stopPropagation();
-    selectControl(el.dataset.name);
-  });
-});
-
-// Click handlers on tree nodes.
-document.querySelectorAll('.tree-node').forEach(el => {
-  el.addEventListener('click', e => {
-    e.stopPropagation();
-    selectControl(el.dataset.target);
-  });
-});
-
-// Expand all tree nodes by default.
-document.querySelectorAll('.tree-node.has-children').forEach(el => el.classList.add('expanded'));
-"""
-        );
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────

@@ -32,6 +32,11 @@ public static class CliCommands
     /// If <paramref name="requestedOutput"/> is <c>"-"</c>, returns a temp file path
     /// so the tool can write there; otherwise returns the original path.
     /// </summary>
+    /// <remarks>
+    /// TODO: Avoid temp files for stdout. For SVG, call with outputPath=null and decode
+    /// the base64Content from the JSON response. For HTML, refactor the tool to optionally
+    /// return content in the response body instead of always requiring a file path.
+    /// </remarks>
     private static string ResolveOutputPath(string requestedOutput, string extension) =>
         requestedOutput == StdoutMarker
             ? Path.Combine(Path.GetTempPath(), $"winforms-cli-{Guid.NewGuid():N}{extension}")

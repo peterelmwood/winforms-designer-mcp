@@ -47,11 +47,26 @@ public class CSharpDesignerFileParser : IDesignerFileParser
             initMethod.Body?.Statements
             ?? throw new InvalidOperationException("InitializeComponent has no body");
 
+        // Collect field names declared in the class so we can distinguish real control
+        // declarations (this.button1 = new Button()) from form-level property assignments
+        // that also use 'new' (this.ClientSize = new Size(...)).
+        var fieldNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var field in classDecl.Members.OfType<FieldDeclarationSyntax>())
+        {
+            foreach (var variable in field.Declaration.Variables)
+            {
+                fieldNames.Add(variable.Identifier.Text);
+            }
+        }
+
         // Phase 1: Extract control declarations (this.x = new Type()).
         var controlsByName = new Dictionary<string, ControlNode>(StringComparer.OrdinalIgnoreCase);
         foreach (var stmt in statements)
         {
-            if (TryParseControlDeclaration(stmt, out var name, out var typeName))
+            if (
+                TryParseControlDeclaration(stmt, out var name, out var typeName)
+                && fieldNames.Contains(name)
+            )
             {
                 controlsByName[name] = new ControlNode { Name = name, ControlType = typeName };
             }
@@ -183,6 +198,14 @@ public class CSharpDesignerFileParser : IDesignerFileParser
         if (
             statement
             is not ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment }
+        )
+            return false;
+
+        // Event wiring uses += (AddAssignment) and -= (SubtractAssignment); skip those here.
+        // They are handled by TryParseEventWiring instead.
+        if (
+            assignment.IsKind(SyntaxKind.AddAssignmentExpression)
+            || assignment.IsKind(SyntaxKind.SubtractAssignmentExpression)
         )
             return false;
 

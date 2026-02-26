@@ -19,14 +19,34 @@ It does **not** start a WinForms application or designer surface - it performs a
 dotnet build                     # Build (debug)
 dotnet build -c Release          # Build (release)
 dotnet build -warnaserror        # Build with warnings-as-errors (use this to validate changes)
+dotnet test                      # Run all tests
 dotnet pack -c Release -o ./artifacts   # Pack as NuGet .NET tool
-dotnet run                       # Run the MCP server (stdio - expects a client on stdin/stdout)
-dotnet run -- --help             # Run the CLI and show available subcommands
-dotnet run -- list-controls --file TestData/SampleForm.Designer.cs  # Example CLI usage
+dotnet run --project src/winforms-designer-mcp   # Run the MCP server (stdio)
+dotnet run --project src/winforms-designer-mcp -- --help   # Show CLI subcommands
+dotnet run --project src/winforms-designer-mcp -- list-controls --file src/winforms-designer-mcp/TestData/SampleForm.Designer.cs
 ```
 
-There are no unit tests yet. Validate changes by ensuring `dotnet build -warnaserror` passes with 0 errors and
-0 warnings.
+Validate changes by ensuring `dotnet build -warnaserror` passes with 0 errors and 0 warnings, and
+`dotnet test` passes all tests.
+
+## Project Structure
+
+The repository uses a `src/` folder layout:
+
+```
+winforms-designer-mcp.sln        # Solution file (repo root)
+src/
+  winforms-designer-mcp/         # Main project
+    Cli/
+    Models/
+    Services/
+    TestData/
+    Tools/
+    Program.cs
+    winforms-designer-mcp.csproj
+  winforms-designer-mcp.Tests/   # Test project (xUnit)
+    winforms-designer-mcp.Tests.csproj
+```
 
 ## Architecture
 
@@ -168,6 +188,8 @@ Use PowerShell's built-in `-Verbose` common parameter for additional diagnostics
 
 ## File Quick Reference
 
+All source paths below are relative to `src/winforms-designer-mcp/` unless noted otherwise.
+
 | File | What it does |
 |---|---|
 | `Program.cs` | Dual entry point: CLI (System.CommandLine) or MCP server (DI + stdio) |
@@ -185,5 +207,6 @@ Use PowerShell's built-in `-Verbose` common parameter for additional diagnostics
 | `Tools/RenderFormTools.cs` | render_form_image (SVG wireframe) |
 | `Tools/RenderFormHtmlTools.cs` | render_form_html (interactive HTML preview) |
 | `Tools/ValidationTools.cs` | check_accessibility_compliance |
-| `.github/workflows/ci.yml` | CI: build + pack on push/PR to main |
+| `src/winforms-designer-mcp.Tests/` | xUnit test project |
+| `.github/workflows/ci.yml` | CI: build + test + pack on push/PR to main |
 | `.github/workflows/publish.yml` | Publish: NuGet + binaries on version tags |

@@ -26,6 +26,9 @@ jobs:
             - name: Build
               run: dotnet build -c Release --no-restore -warnaserror
 
+            - name: Test
+              run: dotnet test -c Release --no-build --verbosity normal
+
             - name: Pack (NuGet tool)
               run: dotnet pack -c Release --no-build -o ./artifacts
 

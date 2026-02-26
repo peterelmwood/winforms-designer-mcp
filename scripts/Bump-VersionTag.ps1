@@ -1,3 +1,26 @@
+<#
+.SYNOPSIS
+Computes and creates the next version tag.
+
+.DESCRIPTION
+Finds the highest v<major>.<minor>.<build> tag, increments the build number, and creates the next tag at HEAD.
+Supports dry-run via -WhatIf, optional push via -Push, and annotated tags via -Message.
+
+.PARAMETER Push
+Pushes the newly created tag to origin after local creation.
+
+.PARAMETER Message
+If provided, creates an annotated tag using this message. If omitted, creates a lightweight tag.
+
+.EXAMPLE
+.\scripts\Bump-VersionTag.ps1
+
+.EXAMPLE
+.\scripts\Bump-VersionTag.ps1 -Message "Release v1.2.3" -Push
+
+.EXAMPLE
+.\scripts\Bump-VersionTag.ps1 -WhatIf
+#>
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = "Low")]
 param(
     [switch]$Push,

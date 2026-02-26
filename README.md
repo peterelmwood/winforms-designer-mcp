@@ -238,6 +238,24 @@ dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true 
 The version is set in the `<Version>` property in the `.csproj`. During CI, the publish workflow derives the
 version automatically from the git tag (e.g., tag `v1.2.3` → version `1.2.3`).
 
+### Version tag script
+
+Use `scripts/Bump-VersionTag.ps1` to compute and create the next `v<major>.<minor>.<build>` tag.
+
+```powershell
+# Create the next local tag
+.\scripts\Bump-VersionTag.ps1
+
+# Create and push the next tag
+.\scripts\Bump-VersionTag.ps1 -Push
+
+# Dry run (no git mutation): prints only the computed tag value
+.\scripts\Bump-VersionTag.ps1 -WhatIf
+```
+
+When `-WhatIf` is used, the script does not create or push any tag and writes only the computed tag (for example,
+`v1.2.3`).
+
 ### Publishing a release
 
 1. Update the `<Version>` in `winforms-designer-mcp.csproj` if desired (CI overrides it from the tag).

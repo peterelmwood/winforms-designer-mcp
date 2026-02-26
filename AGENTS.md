@@ -140,6 +140,24 @@ The project is packaged as a .NET global tool (`<PackAsTool>true</PackAsTool>`).
 property in the `.csproj`. When tagging a release (e.g., `git tag v1.2.3`), the CI publish workflow derives the
 version from the tag automatically.
 
+## Version Tag Script
+
+Use `scripts/Bump-VersionTag.ps1` when preparing release tags.
+
+```powershell
+# Create next local tag
+.\scripts\Bump-VersionTag.ps1
+
+# Create and push next tag
+.\scripts\Bump-VersionTag.ps1 -Push
+
+# Dry run: print only the computed tag value
+.\scripts\Bump-VersionTag.ps1 -WhatIf
+```
+
+`-WhatIf` is implemented using PowerShell `SupportsShouldProcess`: it computes the next tag and prints it, but does
+not create or push any git tag.
+
 ## File Quick Reference
 
 | File | What it does |

@@ -1,3 +1,4 @@
+[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = "Low")]
 param(
     [switch]$Push
 )
@@ -51,15 +52,24 @@ if (-not [string]::IsNullOrWhiteSpace($existing)) {
     throw "Tag '$newTag' already exists."
 }
 
-git tag $newTag HEAD
-if ($LASTEXITCODE -ne 0) {
-    throw "Failed to create tag '$newTag'."
+if ($WhatIfPreference) {
+    Write-Output $newTag
+    return
+}
+
+if ($PSCmdlet.ShouldProcess("HEAD", "Create git tag '$newTag'")) {
+    git tag $newTag HEAD
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to create tag '$newTag'."
+    }
 }
 
 if ($Push.IsPresent) {
-    git push origin $newTag
-    if ($LASTEXITCODE -ne 0) {
-        throw "Tag '$newTag' was created locally, but push failed."
+    if ($PSCmdlet.ShouldProcess("origin", "Push git tag '$newTag'")) {
+        git push origin $newTag
+        if ($LASTEXITCODE -ne 0) {
+            throw "Tag '$newTag' was created locally, but push failed."
+        }
     }
 }
 

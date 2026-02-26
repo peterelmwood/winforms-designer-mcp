@@ -343,6 +343,7 @@ public partial class RenderFormHtmlTools
             case "SplitContainer":
             case "FlowLayoutPanel":
             case "TableLayoutPanel":
+            case "TabPage":
                 // Containers: just show a subtle label; children are rendered separately.
                 if (ctrl.Children.Count == 0)
                 {
@@ -352,9 +353,19 @@ public partial class RenderFormHtmlTools
 
             default:
                 // Unknown control type — show name and type.
-                sb.AppendLine(
-                    $"{pad}<span class=\"generic-ctrl\">{Esc(name)}<br/><small>{Esc(shortType)}</small></span>"
-                );
+                // If the control has children, render as container to avoid covering them.
+                if (ctrl.Children.Count > 0)
+                {
+                    sb.AppendLine(
+                        $"{pad}<span class=\"container-label\">{Esc(name)} ({Esc(shortType)})</span>"
+                    );
+                }
+                else
+                {
+                    sb.AppendLine(
+                        $"{pad}<span class=\"generic-ctrl\">{Esc(name)}<br/><small>{Esc(shortType)}</small></span>"
+                    );
+                }
                 break;
         }
     }
@@ -548,7 +559,9 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; font-size:
   font-size: 12px; color: #1e1e1e; overflow: hidden; }
 
 /* Controls — base */
-.ctrl { position: absolute; overflow: hidden; transition: outline 0.1s; }
+.ctrl { position: absolute; overflow: visible; transition: outline 0.1s; }
+.ctrl-textbox, .ctrl-richtextbox, .ctrl-listbox, .ctrl-datagridview,
+.ctrl-treeview, .ctrl-listview, .ctrl-picturebox { overflow: hidden; }
 .ctrl:hover { outline: 2px solid #0078d4; outline-offset: -1px; cursor: pointer; }
 .ctrl.highlighted { outline: 2px solid #ff0; outline-offset: -1px; }
 
@@ -630,8 +643,9 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; font-size:
 .tab.active { background: #f0f0f0; border-bottom: 1px solid #f0f0f0; }
 
 /* Panel and container types */
-.ctrl-panel, .ctrl-splitcontainer, .ctrl-flowlayoutpanel, .ctrl-tablelayoutpanel {
-  background: rgba(0,0,0,0.02); border: 1px dashed #bbb; }
+.ctrl-panel, .ctrl-splitcontainer, .ctrl-flowlayoutpanel, .ctrl-tablelayoutpanel,
+.ctrl-tabpage {
+  background: rgba(0,0,0,0.02); border: 1px dashed #bbb; overflow: hidden; }
 .container-label { position: absolute; top: 2px; left: 4px; font-size: 9px;
   color: #999; pointer-events: none; }
 

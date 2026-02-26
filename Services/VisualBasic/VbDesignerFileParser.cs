@@ -276,7 +276,8 @@ public class VbDesignerFileParser : IDesignerFileParser
         }
 
         // Child arg: Me.Button1
-        if (invocation.ArgumentList?.Arguments.Count != 1)
+        // Supports both Controls.Add(child) and Controls.Add(child, col, row) for TableLayoutPanel.
+        if (invocation.ArgumentList is null || invocation.ArgumentList.Arguments.Count < 1)
             return false;
 
         var arg = invocation.ArgumentList.Arguments[0].GetExpression();

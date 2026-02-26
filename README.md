@@ -152,6 +152,19 @@ The following tools from the original design are planned for future implementati
 - **`render_form_ascii`** - Generate a text approximation of the form layout for spatial reasoning.
 - **`search_component_docs`** - Provide documentation snippets for WinForms controls and libraries.
 
+## Planned Enhancements (Phase 3)
+
+The following enhancements to the HTML preview renderer are planned for future implementation.
+They require extending the Roslyn parsers to handle additional WinForms designer patterns.
+
+- **MenuStrip / ToolStripMenuItem interactions** — Extend C# and VB parsers to handle `Items.AddRange`
+  and `DropDownItems.AddRange` calls, wiring `ToolStripMenuItem` hierarchy. Render real menu item names
+  with click-to-open dropdown behavior and nested submenu flyouts in the HTML preview.
+- **ToolStrip / StatusStrip real items** — Render actual parsed child `ToolStripButton`,
+  `ToolStripLabel`, and `ToolStripStatusLabel` items instead of placeholder icons and text.
+- **ContextMenuStrip support** — Parse context menu items and display them on right-click of
+  associated controls in the HTML preview.
+
 ## Packaging & Releasing
 
 The project is configured as a [.NET tool](https://learn.microsoft.com/dotnet/core/tools/global-tools) and

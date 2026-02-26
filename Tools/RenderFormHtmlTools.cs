@@ -67,6 +67,9 @@ public partial class RenderFormHtmlTools
             $"  <span class=\"header-title\">WinForms Designer Preview &mdash; {Esc(formTitle)}</span>"
         );
         sb.AppendLine(
+            "  <label class=\"header-toggle\"><input type=\"checkbox\" id=\"toggle-visible\" /> Respect Visible</label>"
+        );
+        sb.AppendLine(
             $"  <span class=\"header-info\">{model.Controls.Count} controls &middot; {model.Language} &middot; {Esc(Path.GetFileName(filePath))}</span>"
         );
         sb.AppendLine("</header>");
@@ -148,7 +151,12 @@ public partial class RenderFormHtmlTools
     /// Recursively render controls as positioned HTML elements using native form elements
     /// where applicable. Renders in reverse for correct Z-order (WinForms Controls[0] is on top).
     /// </summary>
-    private static void RenderHtmlControls(StringBuilder sb, List<ControlNode> controls, int indent)
+    private static void RenderHtmlControls(
+        StringBuilder sb,
+        List<ControlNode> controls,
+        int indent,
+        bool isTabControlChildren = false
+    )
     {
         var pad = new string(' ', indent);
 
@@ -168,9 +176,25 @@ public partial class RenderFormHtmlTools
             var zIndex = controls.Count - i; // first in list = highest z-order
             var posStyle = $"left:{x}px;top:{y}px;width:{w}px;height:{h}px;z-index:{zIndex}";
 
+            // Hide non-first tab pages so only the default tab is visible.
+            if (isTabControlChildren && shortType == "TabPage" && i != 0)
+            {
+                posStyle += ";display:none";
+            }
+
+            // Mark controls that have Visible = False so the toggle can hide them.
+            var visibleAttr = "";
+            if (
+                ctrl.Properties.TryGetValue("Visible", out var visVal)
+                && visVal.Equals("False", StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                visibleAttr = " data-visible=\"false\"";
+            }
+
             sb.AppendLine(
                 $"{pad}<div class=\"ctrl ctrl-{shortType.ToLowerInvariant()}\" "
-                    + $"data-name=\"{Esc(name)}\" data-type=\"{Esc(shortType)}\" "
+                    + $"data-name=\"{Esc(name)}\" data-type=\"{Esc(shortType)}\"{visibleAttr} "
                     + $"style=\"{posStyle}\" title=\"{Esc(name)} ({Esc(shortType)})\">"
             );
 
@@ -180,7 +204,7 @@ public partial class RenderFormHtmlTools
             // Render children inside the container.
             if (ctrl.Children.Count > 0)
             {
-                RenderHtmlControls(sb, ctrl.Children, indent + 2);
+                RenderHtmlControls(sb, ctrl.Children, indent + 2, shortType == "TabControl");
             }
 
             sb.AppendLine($"{pad}</div>");
@@ -311,8 +335,17 @@ public partial class RenderFormHtmlTools
             case "TabControl":
                 sb.AppendLine($"{pad}<div class=\"native-tabcontrol\">");
                 sb.AppendLine($"{pad}  <div class=\"tab-header\">");
-                sb.AppendLine($"{pad}    <span class=\"tab active\">Tab 1</span>");
-                sb.AppendLine($"{pad}    <span class=\"tab\">Tab 2</span>");
+                for (var ti = 0; ti < ctrl.Children.Count; ti++)
+                {
+                    var tabChild = ctrl.Children[ti];
+                    var tabText = tabChild.Properties.GetValueOrDefault("Text", "")?.Trim('"');
+                    if (string.IsNullOrEmpty(tabText))
+                        tabText = tabChild.Name;
+                    var activeClass = ti == 0 ? " active" : "";
+                    sb.AppendLine(
+                        $"{pad}    <span class=\"tab{activeClass}\" data-tab-target=\"{Esc(tabChild.Name)}\">{Esc(tabText)}</span>"
+                    );
+                }
                 sb.AppendLine($"{pad}  </div>");
                 sb.AppendLine($"{pad}</div>");
                 break;
@@ -501,7 +534,13 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; font-size:
 #header { background: #252526; border-bottom: 1px solid #333; padding: 8px 16px;
   display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
 .header-title { font-weight: 600; color: #e0e0e0; }
+.header-toggle { display: flex; align-items: center; gap: 6px; color: #ccc; font-size: 12px;
+  cursor: pointer; user-select: none; }
+.header-toggle input { cursor: pointer; }
 .header-info { font-size: 11px; color: #888; }
+
+/* Visible property toggle — hides controls with Visible=False (cascades via DOM nesting) */
+body.respect-visible .ctrl[data-visible="false"] { display: none !important; }
 
 /* Main layout */
 #main { display: flex; flex: 1; overflow: hidden; }
@@ -639,8 +678,11 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; font-size:
 .ctrl-tabcontrol { background: #f0f0f0; border: 1px solid #999; }
 .native-tabcontrol { height: 100%; }
 .tab-header { display: flex; border-bottom: 1px solid #999; background: #e0e0e0; }
-.tab { padding: 4px 12px; border-right: 1px solid #ccc; cursor: default; font-size: 11px; }
+.tab { padding: 4px 12px; border-right: 1px solid #ccc; cursor: pointer; font-size: 11px;
+  user-select: none; }
+.tab:hover { background: #d0d0d0; }
 .tab.active { background: #f0f0f0; border-bottom: 1px solid #f0f0f0; }
+.tab.active:hover { background: #f0f0f0; }
 
 /* Panel and container types */
 .ctrl-panel, .ctrl-splitcontainer, .ctrl-flowlayoutpanel, .ctrl-tablelayoutpanel,
@@ -679,11 +721,59 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; font-size:
     {
         sb.AppendLine(
             """
-// Tree toggle
+// Visible property toggle — adds/removes body class to hide controls with Visible=False.
+// Invisibility cascades to children via DOM nesting (parent hidden = children hidden).
+document.getElementById('toggle-visible').addEventListener('change', e => {
+  document.body.classList.toggle('respect-visible', e.target.checked);
+});
+
+// Tree toggle — also select the control so tab pages switch when clicked.
 document.querySelectorAll('.tree-node.has-children > .tree-label').forEach(label => {
   label.addEventListener('click', e => {
     e.stopPropagation();
-    label.parentElement.classList.toggle('expanded');
+    const node = label.parentElement;
+    node.classList.toggle('expanded');
+    selectControl(node.dataset.target);
+  });
+});
+
+// Tab switching — show the target tab page, hide its siblings.
+function switchTab(tabPageName) {
+  const tabPage = document.querySelector(`.ctrl-tabpage[data-name="${tabPageName}"]`);
+  if (!tabPage) return;
+  const parent = tabPage.parentElement;
+  if (!parent) return;
+  // Toggle visibility of sibling tab pages.
+  parent.querySelectorAll(':scope > .ctrl-tabpage').forEach(tp => {
+    tp.style.display = tp.dataset.name === tabPageName ? '' : 'none';
+  });
+  // Update active tab header.
+  parent.querySelectorAll('.tab[data-tab-target]').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.tabTarget === tabPageName);
+  });
+}
+
+// Ensure a control's ancestor tab pages are all visible.
+function ensureVisible(element) {
+  if (!element) return;
+  // Collect ancestor tab pages from innermost to outermost.
+  const ancestors = [];
+  let el = element.closest('.ctrl-tabpage');
+  while (el) {
+    ancestors.push(el);
+    el = el.parentElement?.closest('.ctrl-tabpage');
+  }
+  // Switch from outermost to innermost so parent tabs are visible first.
+  for (let i = ancestors.length - 1; i >= 0; i--) {
+    switchTab(ancestors[i].dataset.name);
+  }
+}
+
+// Tab header click handlers.
+document.querySelectorAll('.tab[data-tab-target]').forEach(tab => {
+  tab.addEventListener('click', e => {
+    e.stopPropagation();
+    switchTab(tab.dataset.tabTarget);
   });
 });
 
@@ -697,6 +787,12 @@ function selectControl(name) {
   // Highlight control in canvas.
   const ctrl = document.querySelector(`.ctrl[data-name="${name}"]`);
   if (ctrl) {
+    // Make sure any ancestor tab pages are visible.
+    ensureVisible(ctrl);
+    // If this IS a tab page, switch to it.
+    if (ctrl.classList.contains('ctrl-tabpage')) {
+      switchTab(name);
+    }
     ctrl.classList.add('highlighted');
     ctrl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }

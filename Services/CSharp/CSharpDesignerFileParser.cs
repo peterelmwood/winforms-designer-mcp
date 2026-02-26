@@ -269,8 +269,9 @@ public class CSharpDesignerFileParser : IDesignerFileParser
             return false;
         }
 
-        // Extract child from argument: this.button1
-        if (invocation.ArgumentList.Arguments.Count != 1)
+        // Extract child from first argument: this.button1
+        // Supports both Controls.Add(child) and Controls.Add(child, col, row) for TableLayoutPanel.
+        if (invocation.ArgumentList.Arguments.Count < 1)
             return false;
 
         var arg = invocation.ArgumentList.Arguments[0].Expression;

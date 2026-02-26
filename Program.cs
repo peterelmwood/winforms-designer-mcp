@@ -1,10 +1,20 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using WinFormsDesignerMcp.Cli;
 using WinFormsDesignerMcp.Services;
 using WinFormsDesignerMcp.Services.CSharp;
 using WinFormsDesignerMcp.Services.VisualBasic;
 
+// ── CLI mode: if any command-line arguments are passed, run as a one-shot CLI ──
+if (args.Length > 0)
+{
+    var rootCommand = CliCommands.BuildRootCommand();
+    var exitCode = await rootCommand.Parse(args).InvokeAsync();
+    return exitCode;
+}
+
+// ── MCP server mode: no arguments → start the stdio MCP server ──
 // Use the minimal HostBuilder instead of Host.CreateApplicationBuilder to avoid
 // loading file configuration providers, environment variable scanning, appsettings.json,
 // user secrets, and other overhead that an stdio MCP server doesn't need.
@@ -34,3 +44,4 @@ builder.ConfigureServices(services =>
 });
 
 await builder.Build().RunAsync();
+return 0;

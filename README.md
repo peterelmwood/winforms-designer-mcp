@@ -87,6 +87,56 @@ Add to your `.vscode/mcp.json`:
 npx @modelcontextprotocol/inspector dotnet run --project /absolute/path/to/winforms-designer-mcp
 ```
 
+## CLI Usage
+
+The same tool capabilities are also available as a direct command-line interface. When arguments are passed,
+the process runs as a CLI tool instead of an MCP server.
+
+```bash
+# Show help and all available subcommands
+winforms-designer-mcp --help
+
+# List all controls in a designer file
+winforms-designer-mcp list-controls --file MyForm.Designer.cs
+
+# Get properties for a specific control
+winforms-designer-mcp get-control-properties --file MyForm.Designer.cs --control button1
+
+# Parse a designer file into full JSON
+winforms-designer-mcp parse --file MyForm.Designer.vb
+
+# Render an interactive HTML preview
+winforms-designer-mcp render-html --file MyForm.Designer.cs --output preview.html
+
+# Render an SVG wireframe
+winforms-designer-mcp render-svg --file MyForm.Designer.cs --output wireframe.svg
+
+# Pipe rendered output directly to stdout with --output -
+winforms-designer-mcp render-svg --file MyForm.Designer.cs --output - > wireframe.svg
+winforms-designer-mcp render-html --file MyForm.Designer.cs --output - | less
+
+# Add a new control
+winforms-designer-mcp place-control --file MyForm.Designer.cs --type Button --name btnSave --parent panel1
+
+# Modify a control property
+winforms-designer-mcp modify-property --file MyForm.Designer.cs --control btnSave --property Text --value '"Save"'
+
+# Remove a control
+winforms-designer-mcp remove-control --file MyForm.Designer.cs --control btnSave
+
+# List available control types
+winforms-designer-mcp control-types
+
+# Get metadata for a specific control type
+winforms-designer-mcp control-type-info --type DataGridView
+
+# Check accessibility compliance
+winforms-designer-mcp check-accessibility --file MyForm.Designer.cs
+```
+
+> **Running from source:** Replace `winforms-designer-mcp` with `dotnet run --` when working from the repo:
+> `dotnet run -- list-controls --file TestData/SampleForm.Designer.cs`
+
 ## Approach
 
 This server takes a **file-based** approach - it directly parses and generates `InitializeComponent()` code in

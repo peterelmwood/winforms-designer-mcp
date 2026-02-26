@@ -8,6 +8,8 @@ This is an **MCP (Model Context Protocol) server** written in C# / .NET 10 that 
 `.Designer.cs` and `.Designer.vb` files. It uses the **stdio** transport and is consumed by MCP clients like
 Claude Desktop, VS Code Copilot, or MCP Inspector.
 
+It also provides a **direct CLI** with the same capabilities, using System.CommandLine subcommands.
+
 It does **not** start a WinForms application or designer surface - it performs all work by parsing and generating
 `InitializeComponent()` code via Roslyn syntax trees.
 
@@ -19,6 +21,8 @@ dotnet build -c Release          # Build (release)
 dotnet build -warnaserror        # Build with warnings-as-errors (use this to validate changes)
 dotnet pack -c Release -o ./artifacts   # Pack as NuGet .NET tool
 dotnet run                       # Run the MCP server (stdio - expects a client on stdin/stdout)
+dotnet run -- --help             # Run the CLI and show available subcommands
+dotnet run -- list-controls --file TestData/SampleForm.Designer.cs  # Example CLI usage
 ```
 
 There are no unit tests yet. Validate changes by ensuring `dotnet build -warnaserror` passes with 0 errors and
@@ -30,18 +34,23 @@ There are no unit tests yet. Validate changes by ensuring `dotnet build -warnase
 
 ```
 MCP Client ←(stdio)→ Program.cs (Host) → MCP Tool methods → DesignerFileService → Parser/Writer
+CLI args   ────────→ Program.cs (CLI)  → MCP Tool methods → DesignerFileService → Parser/Writer
 ```
 
-1. **Program.cs** - Configures the .NET Generic Host with DI, registers parser/writer services as singletons,
-   adds the MCP server with stdio transport, and auto-discovers tool classes from the assembly.
-2. **DesignerFileService** - Facade that detects language from file extension (`.cs` → C#, `.vb` → VB.NET)
+1. **Program.cs** - Dual entry point. If command-line arguments are provided, routes to the CLI
+   (System.CommandLine `RootCommand`). Otherwise, configures the .NET Generic Host with DI, registers
+   parser/writer services as singletons, adds the MCP server with stdio transport, and auto-discovers
+   tool classes from the assembly.
+2. **Cli/CliCommands.cs** - Builds a `RootCommand` with 11 subcommands that map 1:1 to MCP tools.
+   Manually constructs `DesignerFileService` (no DI host) and calls the existing static tool methods.
+3. **DesignerFileService** - Facade that detects language from file extension (`.cs` → C#, `.vb` → VB.NET)
    and delegates to the correct `IDesignerFileParser` / `IDesignerFileWriter`.
-3. **Parsers** (`CSharpDesignerFileParser`, `VbDesignerFileParser`) - Use Roslyn to parse `InitializeComponent()`
+4. **Parsers** (`CSharpDesignerFileParser`, `VbDesignerFileParser`) - Use Roslyn to parse `InitializeComponent()`
    into a language-agnostic `FormModel`. Each statement is tried against several patterns: control declaration,
    property assignment, `Controls.Add`, and event wiring. A final pass builds the parent-child hierarchy.
-4. **Writers** (`CSharpDesignerFileWriter`, `VbDesignerFileWriter`) - Regenerate `InitializeComponent()` and
+5. **Writers** (`CSharpDesignerFileWriter`, `VbDesignerFileWriter`) - Regenerate `InitializeComponent()` and
    field declarations from a `FormModel`, preserving other code in the file (Dispose, etc.).
-5. **Tools** - Static methods annotated with `[McpServerTool]` inside `[McpServerToolType]` classes.
+6. **Tools** - Static methods annotated with `[McpServerTool]` inside `[McpServerToolType]` classes.
    `DesignerFileService` is injected as a method parameter by the MCP SDK.
 
 ### Key Models
@@ -77,6 +86,19 @@ to evaluate the expressions.
 7. Return JSON (use `JsonSerializer.Serialize` with `JsonNamingPolicy.CamelCase`).
 
 The MCP SDK auto-discovers tools from the assembly - no manual registration needed.
+
+When you add a new MCP tool, also add the corresponding CLI subcommand in `Cli/CliCommands.cs` — see below.
+
+## Adding a CLI Subcommand
+
+Each MCP tool should have a matching CLI subcommand in `Cli/CliCommands.cs`:
+
+1. Add a `private static Command BuildXxx()` method that creates a `Command` with options.
+2. Use `new Option<T>("--name") { Description = "...", Required = true }` — **not** the `(name, description)`
+   constructor overload (System.CommandLine 2.x treats the 2nd string as an alias, not a description).
+3. Call `cmd.SetAction(...)` and invoke the existing static tool method, passing
+   `CliCommands.CreateService()` for the `DesignerFileService` parameter.
+4. Register the new command in `BuildRootCommand()` with `root.Add(BuildXxx())`.
 
 ## Adding a New Language
 
@@ -122,7 +144,8 @@ version from the tag automatically.
 
 | File | What it does |
 |---|---|
-| `Program.cs` | Entry point: DI, MCP server config, stdio transport |
+| `Program.cs` | Dual entry point: CLI (System.CommandLine) or MCP server (DI + stdio) |
+| `Cli/CliCommands.cs` | CLI subcommands mapping 1:1 to MCP tools |
 | `Models/FormModel.cs` | Core model: form properties, events, controls |
 | `Models/ControlNode.cs` | Single control: name, type, properties, children, events |
 | `Services/DesignerFileService.cs` | Facade: language detection + parser/writer delegation |

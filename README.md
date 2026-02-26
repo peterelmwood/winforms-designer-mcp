@@ -18,7 +18,7 @@ cd winforms-designer-mcp
 dotnet build
 
 # Run the server (stdio transport - typically launched by an MCP client)
-dotnet run
+dotnet run --project src/winforms-designer-mcp
 ```
 
 ## Installation
@@ -59,7 +59,7 @@ Add the following to your Claude Desktop `claude_desktop_config.json`:
   "mcpServers": {
     "winforms-designer": {
       "command": "dotnet",
-      "args": ["run", "--project", "/absolute/path/to/winforms-designer-mcp"]
+      "args": ["run", "--project", "/absolute/path/to/winforms-designer-mcp/src/winforms-designer-mcp"]
     }
   }
 }
@@ -75,7 +75,7 @@ Add to your `.vscode/mcp.json`:
     "winforms-designer": {
       "type": "stdio",
       "command": "dotnet",
-      "args": ["run", "--project", "/absolute/path/to/winforms-designer-mcp"]
+      "args": ["run", "--project", "/absolute/path/to/winforms-designer-mcp/src/winforms-designer-mcp"]
     }
   }
 }
@@ -84,7 +84,7 @@ Add to your `.vscode/mcp.json`:
 ### MCP Inspector (manual testing)
 
 ```bash
-npx @modelcontextprotocol/inspector dotnet run --project /absolute/path/to/winforms-designer-mcp
+npx @modelcontextprotocol/inspector dotnet run --project /absolute/path/to/winforms-designer-mcp/src/winforms-designer-mcp
 ```
 
 ## CLI Usage
@@ -134,8 +134,9 @@ winforms-designer-mcp control-type-info --type DataGridView
 winforms-designer-mcp check-accessibility --file MyForm.Designer.cs
 ```
 
-> **Running from source:** Replace `winforms-designer-mcp` with `dotnet run --` when working from the repo:
-> `dotnet run -- list-controls --file TestData/SampleForm.Designer.cs`
+> **Running from source:** Replace `winforms-designer-mcp` with `dotnet run --project src/winforms-designer-mcp --`
+> when working from the repo:
+> `dotnet run --project src/winforms-designer-mcp -- list-controls --file src/winforms-designer-mcp/TestData/SampleForm.Designer.cs`
 
 ## Approach
 
@@ -267,7 +268,7 @@ Use PowerShell's built-in `-Verbose` common parameter for additional diagnostics
 
 ### Publishing a release
 
-1. Update the `<Version>` in `winforms-designer-mcp.csproj` if desired (CI overrides it from the tag).
+1. Update the `<Version>` in `src/winforms-designer-mcp/winforms-designer-mcp.csproj` if desired (CI overrides it from the tag).
 2. Commit and push to `main`.
 3. Tag the commit: `git tag v1.2.3 && git push origin v1.2.3`
 4. The **Publish** workflow will:
@@ -277,41 +278,51 @@ Use PowerShell's built-in `-Verbose` common parameter for additional diagnostics
 
 ### CI
 
-The **CI** workflow runs on every push/PR to `main`: build, pack, and upload the `.nupkg` as an artifact.
+The **CI** workflow runs on every push/PR to `main`: build, test, pack, and upload the `.nupkg` as an artifact.
 
 ## Project Structure
 
 ```text
-Program.cs                              # MCP server entry point (stdio transport)
-AGENTS.md                              # Agent instructions for AI coding assistants
-Models/
-  FormModel.cs                          # Language-agnostic form representation
-  ControlNode.cs                        # Control tree node (properties, children, events)
-  EventWiring.cs                        # Event -> handler mapping
-  DesignerLanguage.cs                   # CSharp / VisualBasic enum
-Services/
-  IDesignerFileParser.cs                # Parser interface
-  IDesignerFileWriter.cs                # Writer interface
-  DesignerFileService.cs                # Facade - language detection + delegation
-  CSharp/
-    CSharpDesignerFileParser.cs         # Roslyn-based .Designer.cs parser
-    CSharpDesignerFileWriter.cs         # .Designer.cs code generator
-  VisualBasic/
-    VbDesignerFileParser.cs             # Roslyn-based .Designer.vb parser
-    VbDesignerFileWriter.cs             # .Designer.vb code generator
-Tools/
-  VisualTreeTools.cs                    # list_controls, get_control_properties, parse_designer_file
-  LayoutTools.cs                        # place_control, modify_control_property, remove_control
-  MetadataTools.cs                      # get_available_control_types, get_control_type_info
-  RenderFormTools.cs                    # render_form_image (SVG wireframe)
-  RenderFormHtmlTools.cs                # render_form_html (interactive HTML preview)
-  ValidationTools.cs                    # check_accessibility_compliance
-TestData/
-  SampleForm.Designer.cs               # C# sample form (5 controls with nesting and events)
-  SampleForm.Designer.vb               # Equivalent VB.NET sample form
+winforms-designer-mcp.sln               # Solution file (repo root)
+AGENTS.md                               # Agent instructions for AI coding assistants
+src/
+  winforms-designer-mcp/                # Main project
+    Program.cs                          # MCP server / CLI entry point
+    winforms-designer-mcp.csproj        # Project file (.NET 10 tool)
+    Cli/
+      CliCommands.cs                    # CLI subcommands mapping 1:1 to MCP tools
+    Models/
+      FormModel.cs                      # Language-agnostic form representation
+      ControlNode.cs                    # Control tree node (properties, children, events)
+      EventWiring.cs                    # Event -> handler mapping
+      DesignerLanguage.cs               # CSharp / VisualBasic enum
+    Services/
+      IDesignerFileParser.cs            # Parser interface
+      IDesignerFileWriter.cs            # Writer interface
+      DesignerFileService.cs            # Facade - language detection + delegation
+      CSharp/
+        CSharpDesignerFileParser.cs     # Roslyn-based .Designer.cs parser
+        CSharpDesignerFileWriter.cs     # .Designer.cs code generator
+      VisualBasic/
+        VbDesignerFileParser.cs         # Roslyn-based .Designer.vb parser
+        VbDesignerFileWriter.cs         # .Designer.vb code generator
+    Templates/
+      FormPreview.html                  # Embedded HTML template for interactive preview
+    TestData/
+      SampleForm.Designer.cs            # C# sample form (5 controls with nesting and events)
+      SampleForm.Designer.vb            # Equivalent VB.NET sample form
+    Tools/
+      VisualTreeTools.cs                # list_controls, get_control_properties, parse_designer_file
+      LayoutTools.cs                    # place_control, modify_control_property, remove_control
+      MetadataTools.cs                  # get_available_control_types, get_control_type_info
+      RenderFormTools.cs                # render_form_image (SVG wireframe)
+      RenderFormHtmlTools.cs            # render_form_html (interactive HTML preview)
+      ValidationTools.cs                # check_accessibility_compliance
+  winforms-designer-mcp.Tests/          # xUnit test project
+    winforms-designer-mcp.Tests.csproj
 .github/
   workflows/
-    ci.yml                              # Build + pack on push/PR to main
+    ci.yml                              # Build + test + pack on push/PR to main
     publish.yml                         # NuGet + self-contained binaries on version tags
 ```
 
@@ -323,6 +334,7 @@ TestData/
 | `Microsoft.Extensions.Hosting` | .NET Generic Host for DI and lifetime management |
 | `Microsoft.CodeAnalysis.CSharp` | Roslyn - C# syntax tree parsing and manipulation |
 | `Microsoft.CodeAnalysis.VisualBasic` | Roslyn - VB.NET syntax tree parsing and manipulation |
+| `System.CommandLine` | CLI subcommand parsing and argument handling |
 
 ## License
 

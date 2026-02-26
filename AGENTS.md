@@ -40,6 +40,7 @@ src/
     Cli/
     Models/
     Services/
+    Templates/
     TestData/
     Tools/
     Program.cs
@@ -206,6 +207,7 @@ All source paths below are relative to `src/winforms-designer-mcp/` unless noted
 | `Tools/MetadataTools.cs` | get_available_control_types, get_control_type_info |
 | `Tools/RenderFormTools.cs` | render_form_image (SVG wireframe) |
 | `Tools/RenderFormHtmlTools.cs` | render_form_html (interactive HTML preview) |
+| `Templates/FormPreview.html` | Embedded HTML template for the interactive preview (CSS + JS) |
 | `Tools/ValidationTools.cs` | check_accessibility_compliance |
 | `src/winforms-designer-mcp.Tests/` | xUnit test project |
 | `.github/workflows/ci.yml` | CI: build + test + pack on push/PR to main |

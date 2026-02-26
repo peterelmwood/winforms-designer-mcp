@@ -246,15 +246,24 @@ Use `scripts/Bump-VersionTag.ps1` to compute and create the next `v<major>.<mino
 # Create the next local tag
 .\scripts\Bump-VersionTag.ps1
 
+# Create an annotated tag with a message
+.\scripts\Bump-VersionTag.ps1 -Message "Release v1.2.3"
+
 # Create and push the next tag
 .\scripts\Bump-VersionTag.ps1 -Push
 
 # Dry run (no git mutation): prints only the computed tag value
 .\scripts\Bump-VersionTag.ps1 -WhatIf
+
+# Show additional script diagnostics
+.\scripts\Bump-VersionTag.ps1 -Verbose
 ```
 
 When `-WhatIf` is used, the script does not create or push any tag and writes only the computed tag (for example,
 `v1.2.3`).
+When `-Message` is provided, the script creates an annotated tag (`git tag -a ... -m ...`); otherwise it creates a
+lightweight tag.
+Use PowerShell's built-in `-Verbose` common parameter for additional diagnostics.
 
 ### Publishing a release
 

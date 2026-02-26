@@ -148,15 +148,23 @@ Use `scripts/Bump-VersionTag.ps1` when preparing release tags.
 # Create next local tag
 .\scripts\Bump-VersionTag.ps1
 
+# Create annotated tag with a message
+.\scripts\Bump-VersionTag.ps1 -Message "Release v1.2.3"
+
 # Create and push next tag
 .\scripts\Bump-VersionTag.ps1 -Push
 
 # Dry run: print only the computed tag value
 .\scripts\Bump-VersionTag.ps1 -WhatIf
+
+# Show additional script diagnostics
+.\scripts\Bump-VersionTag.ps1 -Verbose
 ```
 
 `-WhatIf` is implemented using PowerShell `SupportsShouldProcess`: it computes the next tag and prints it, but does
 not create or push any git tag.
+If `-Message` is supplied, the script creates an annotated tag; without it, it creates a lightweight tag.
+Use PowerShell's built-in `-Verbose` common parameter for additional diagnostics.
 
 ## File Quick Reference
 

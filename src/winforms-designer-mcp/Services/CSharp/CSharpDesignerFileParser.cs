@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+
 using WinFormsDesignerMcp.Models;
 
 namespace WinFormsDesignerMcp.Services.CSharp;
@@ -13,6 +14,20 @@ public class CSharpDesignerFileParser : IDesignerFileParser
 {
     public DesignerLanguage Language => DesignerLanguage.CSharp;
 
+    /// <summary>
+    /// Parses a C# Windows Forms designer file asynchronously and extracts the form structure, including controls,
+    /// properties, and event wiring.
+    /// </summary>
+    /// <remarks>The returned FormModel includes the form's name, namespace, properties, events, and a
+    /// hierarchy of controls as defined in the designer file. Only controls and properties explicitly declared in the
+    /// file are included. This method does not validate the correctness of the designer file beyond the required
+    /// structure.</remarks>
+    /// <param name="filePath">The full path to the C# designer file to parse. The file must exist and be accessible.</param>
+    /// <param name="cancellationToken">A cancellation token that can be used to cancel the parse operation.</param>
+    /// <returns>A task that represents the asynchronous parse operation. The task result contains a FormModel describing the
+    /// form's structure and metadata.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the file does not contain a class declaration or an InitializeComponent method, or if
+    /// InitializeComponent has no body.</exception>
     public async Task<FormModel> ParseAsync(
         string filePath,
         CancellationToken cancellationToken = default
@@ -104,6 +119,7 @@ public class CSharpDesignerFileParser : IDesignerFileParser
                     children = [];
                     parentChildMap[key] = children;
                 }
+
                 children.Add(childName);
             }
 
@@ -163,18 +179,26 @@ public class CSharpDesignerFileParser : IDesignerFileParser
             statement
             is not ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment }
         )
+        {
             return false;
+        }
 
         // Left side: this.controlName
         if (assignment.Left is not MemberAccessExpressionSyntax left)
+        {
             return false;
+        }
 
         if (left.Expression is not ThisExpressionSyntax)
+        {
             return false;
+        }
 
         // Right side: new Type()
         if (assignment.Right is not ObjectCreationExpressionSyntax creation)
+        {
             return false;
+        }
 
         controlName = left.Name.Identifier.Text;
         typeName = creation.Type.ToString();
@@ -199,7 +223,9 @@ public class CSharpDesignerFileParser : IDesignerFileParser
             statement
             is not ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment }
         )
+        {
             return false;
+        }
 
         // Event wiring uses += (AddAssignment) and -= (SubtractAssignment); skip those here.
         // They are handled by TryParseEventWiring instead.
@@ -207,10 +233,14 @@ public class CSharpDesignerFileParser : IDesignerFileParser
             assignment.IsKind(SyntaxKind.AddAssignmentExpression)
             || assignment.IsKind(SyntaxKind.SubtractAssignmentExpression)
         )
+        {
             return false;
+        }
 
         if (assignment.Left is not MemberAccessExpressionSyntax propAccess)
+        {
             return false;
+        }
 
         // Note: we intentionally do NOT skip ObjectCreationExpressionSyntax on the right side.
         // Control declarations (this.button1 = new Button()) are handled separately by
@@ -259,21 +289,31 @@ public class CSharpDesignerFileParser : IDesignerFileParser
             statement
             is not ExpressionStatementSyntax { Expression: InvocationExpressionSyntax invocation }
         )
+        {
             return false;
+        }
 
         // The method must be ".Controls.Add"
         if (invocation.Expression is not MemberAccessExpressionSyntax methodAccess)
+        {
             return false;
+        }
 
         if (methodAccess.Name.Identifier.Text != "Add")
+        {
             return false;
+        }
 
         // methodAccess.Expression should be X.Controls
         if (methodAccess.Expression is not MemberAccessExpressionSyntax controlsAccess)
+        {
             return false;
+        }
 
         if (controlsAccess.Name.Identifier.Text != "Controls")
+        {
             return false;
+        }
 
         // Extract parent: this.panel1.Controls or this.Controls
         if (
@@ -295,7 +335,9 @@ public class CSharpDesignerFileParser : IDesignerFileParser
         // Extract child from first argument: this.button1
         // Supports both Controls.Add(child) and Controls.Add(child, col, row) for TableLayoutPanel.
         if (invocation.ArgumentList.Arguments.Count < 1)
+        {
             return false;
+        }
 
         var arg = invocation.ArgumentList.Arguments[0].Expression;
         if (
@@ -328,14 +370,20 @@ public class CSharpDesignerFileParser : IDesignerFileParser
             statement
             is not ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment }
         )
+        {
             return false;
+        }
 
         if (!assignment.IsKind(SyntaxKind.AddAssignmentExpression))
+        {
             return false;
+        }
 
         // Left side: this.button1.Click or this.Click
         if (assignment.Left is not MemberAccessExpressionSyntax eventAccess)
+        {
             return false;
+        }
 
         eventName = eventAccess.Name.Identifier.Text;
 
@@ -395,10 +443,14 @@ public class CSharpDesignerFileParser : IDesignerFileParser
         foreach (var (parentKey, childNames) in parentChildMap)
         {
             if (parentKey == "$form")
+            {
                 continue; // Root controls are handled by caller.
+            }
 
             if (!controls.TryGetValue(parentKey, out var parentNode))
+            {
                 continue;
+            }
 
             foreach (var childName in childNames)
             {

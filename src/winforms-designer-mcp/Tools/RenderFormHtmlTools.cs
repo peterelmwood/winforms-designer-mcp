@@ -77,7 +77,7 @@ public partial class RenderFormHtmlTools
             .Replace("{{FILE_NAME}}", Esc(Path.GetFileName(filePath)))
             .Replace("{{TREE_NODES}}", treeNodesSb.ToString())
             .Replace("{{CONTROLS_HTML}}", controlsSb.ToString())
-            .Replace("{{CONTROL_DATA_JSON}}", jsonSb.ToString());
+            .Replace("__CONTROL_DATA_JSON__", jsonSb.ToString());
 
         await File.WriteAllTextAsync(outputPath, html, cancellationToken);
 
@@ -442,6 +442,8 @@ public partial class RenderFormHtmlTools
     /// </summary>
     private static void EmitControlDataJson(StringBuilder sb, FormModel model)
     {
+        sb.AppendLine("{");
+
         // Form-level properties.
         sb.Append("  \"$form\": {");
         EmitPropertyEntries(sb, model.FormProperties);
@@ -479,6 +481,8 @@ public partial class RenderFormHtmlTools
             }
             sb.AppendLine("},");
         }
+
+        sb.Append("}");
     }
 
     private static void EmitPropertyEntries(StringBuilder sb, Dictionary<string, string> props)

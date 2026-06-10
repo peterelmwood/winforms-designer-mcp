@@ -24,6 +24,8 @@
   </PropertyGroup>
   <PropertyGroup>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <!-- Strip the build machine's absolute path from embedded source paths in PDBs/stack traces. -->
+    <PathMap>$(MSBuildProjectDirectory)=./</PathMap>
   </PropertyGroup>
   <ItemGroup>
     <None Include="../../README.md" Pack="true" PackagePath="\" />

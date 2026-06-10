@@ -10,9 +10,17 @@ using WinFormsDesignerMcp.Services.VisualBasic;
 // ── CLI mode: if any command-line arguments are passed, run as a one-shot CLI ──
 if (args.Length > 0)
 {
-    var rootCommand = CliCommands.BuildRootCommand();
-    var exitCode = await rootCommand.Parse(args).InvokeAsync();
-    return exitCode;
+    try
+    {
+        var rootCommand = CliCommands.BuildRootCommand();
+        var exitCode = await rootCommand.Parse(args).InvokeAsync();
+        return exitCode;
+    }
+    catch (Exception ex)
+    {
+        await Console.Error.WriteLineAsync($"Error: {ex.Message}");
+        return 1;
+    }
 }
 
 // ── MCP server mode: no arguments → start the stdio MCP server ──

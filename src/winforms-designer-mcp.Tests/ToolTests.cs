@@ -305,11 +305,149 @@ public class ToolTests
             Assert.True(File.Exists(tmpFile));
             var content = await File.ReadAllTextAsync(tmpFile);
             Assert.Contains("<!DOCTYPE html>", content);
+
+            // T008 — Panel nesting: button1 must appear inside panel1, not as a root sibling.
+            var panelIdx = content.IndexOf("data-name=\"panel1\"", StringComparison.Ordinal);
+            var button1Idx = content.IndexOf("data-name=\"button1\"", StringComparison.Ordinal);
+            var label1Idx = content.IndexOf("data-name=\"label1\"", StringComparison.Ordinal);
+            Assert.True(panelIdx >= 0, "panel1 should appear in the HTML");
+            Assert.True(button1Idx >= 0, "button1 should appear in the HTML");
+            Assert.True(
+                button1Idx > panelIdx,
+                "button1 must appear after panel1 opens (nesting check)"
+            );
+            Assert.True(
+                button1Idx < label1Idx,
+                "button1 must appear before label1 (root-level sibling), confirming it is not promoted to the form root"
+            );
         }
         finally
         {
             File.Delete(tmpFile);
         }
+    }
+
+    [Fact]
+    public async Task RenderHtml_GroupBox_ChildrenNestedInParentDiv()
+    {
+        // T002 — GroupBox children must appear nested inside the groupBox1 div.
+        // This is the primary regression test for FR-1 and FR-2.
+        var tmpFile = Path.Combine(Path.GetTempPath(), $"test-{Guid.NewGuid():N}.html");
+        try
+        {
+            var json = await RenderFormHtmlTools.RenderFormHtml(
+                TestHelpers.CreateService(),
+                TestHelpers.MultipleControlsPath,
+                tmpFile,
+                CancellationToken.None
+            );
+
+            // T002 / SC-6: verify control count in JSON response.
+            // 21 System.Windows.Forms controls + 1 System.ComponentModel.BackgroundWorker = 22.
+            using var doc = JsonDocument.Parse(json);
+            var controlCount = doc.RootElement.GetProperty("controlCount").GetInt32();
+            Assert.Equal(22, controlCount);
+
+            var html = await File.ReadAllTextAsync(tmpFile);
+
+            // Child controls must exist in the HTML at all.
+            Assert.Contains("data-name=\"groupBox1\"", html);
+            Assert.Contains("data-name=\"radioButton1\"", html);
+            Assert.Contains("data-name=\"radioButton2\"", html);
+
+            // radioButton1/2 must appear AFTER groupBox1 opens (nesting).
+            var gbIdx = html.IndexOf("data-name=\"groupBox1\"", StringComparison.Ordinal);
+            var rb1Idx = html.IndexOf("data-name=\"radioButton1\"", StringComparison.Ordinal);
+            var rb2Idx = html.IndexOf("data-name=\"radioButton2\"", StringComparison.Ordinal);
+            Assert.True(
+                rb1Idx > gbIdx,
+                "radioButton1 must appear after groupBox1 opens — it should be nested inside it"
+            );
+            Assert.True(
+                rb2Idx > gbIdx,
+                "radioButton2 must appear after groupBox1 opens — it should be nested inside it"
+            );
+        }
+        finally
+        {
+            File.Delete(tmpFile);
+        }
+    }
+
+    [Fact]
+    public async Task RenderHtml_TabControl_LeafControlsNestedInTabPage()
+    {
+        // T003 — 3-level nesting: comboBox1 must appear inside tabPage1 which is inside tabControl1.
+        var tmpFile = Path.Combine(Path.GetTempPath(), $"test-{Guid.NewGuid():N}.html");
+        try
+        {
+            var html = await RenderAndReadHtml(TestHelpers.MultipleControlsPath, tmpFile);
+
+            // All elements must exist.
+            Assert.Contains("data-name=\"tabControl1\"", html);
+            Assert.Contains("data-name=\"tabPage1\"", html);
+            Assert.Contains("data-name=\"comboBox1\"", html);
+            Assert.Contains("data-name=\"checkBox1\"", html);
+
+            // comboBox1 must appear after tabControl1 AND after tabPage1 (3-level nesting).
+            var tcIdx = html.IndexOf("data-name=\"tabControl1\"", StringComparison.Ordinal);
+            var tp1Idx = html.IndexOf("data-name=\"tabPage1\"", StringComparison.Ordinal);
+            var cb1Idx = html.IndexOf("data-name=\"comboBox1\"", StringComparison.Ordinal);
+            Assert.True(tp1Idx > tcIdx, "tabPage1 must appear after tabControl1 opens");
+            Assert.True(
+                cb1Idx > tp1Idx,
+                "comboBox1 must appear after tabPage1 opens — 3-level nesting"
+            );
+
+            // checkBox1 must appear after tabPage2.
+            var tp2Idx = html.IndexOf("data-name=\"tabPage2\"", StringComparison.Ordinal);
+            var chk1Idx = html.IndexOf("data-name=\"checkBox1\"", StringComparison.Ordinal);
+            Assert.True(
+                chk1Idx > tp2Idx,
+                "checkBox1 must appear after tabPage2 opens — nested inside it"
+            );
+        }
+        finally
+        {
+            File.Delete(tmpFile);
+        }
+    }
+
+    [Fact]
+    public async Task RenderHtml_VbSample_ChildControlsNestedInPanel()
+    {
+        // T014 — VB.NET parity: Button1 must be nested inside Panel1 for the VB sample.
+        // VB sample uses PascalCase names: Panel1, Button1, TextBox1.
+        var tmpFile = Path.Combine(Path.GetTempPath(), $"test-{Guid.NewGuid():N}.html");
+        try
+        {
+            var html = await RenderAndReadHtml(TestHelpers.VbSamplePath, tmpFile);
+
+            Assert.Contains("data-name=\"Panel1\"", html);
+            Assert.Contains("data-name=\"Button1\"", html);
+
+            var panelIdx = html.IndexOf("data-name=\"Panel1\"", StringComparison.Ordinal);
+            var buttonIdx = html.IndexOf("data-name=\"Button1\"", StringComparison.Ordinal);
+            Assert.True(
+                buttonIdx > panelIdx,
+                "Button1 must appear after Panel1 opens in the VB.NET HTML output"
+            );
+        }
+        finally
+        {
+            File.Delete(tmpFile);
+        }
+    }
+
+    private static async Task<string> RenderAndReadHtml(string designerPath, string outputPath)
+    {
+        await RenderFormHtmlTools.RenderFormHtml(
+            TestHelpers.CreateService(),
+            designerPath,
+            outputPath,
+            CancellationToken.None
+        );
+        return await File.ReadAllTextAsync(outputPath);
     }
 
     // ─── ValidationTools ─────────────────────────────────────────────────

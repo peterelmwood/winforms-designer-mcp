@@ -41,6 +41,21 @@
 
 The parser is confirmed correct: `panel1.Children = [button1, textBox1]` for the SampleForm.
 
+## Root Cause
+
+**Diagnosis (2026-06-10):** The C# rendering code (`RenderHtmlControls`) and the sidebar tree (`RenderTreeNodes`) correctly generate nested HTML for all container types at every depth. Tests T002/T003/T008/T014 all pass before any code change, confirming the DOM structure is correct.
+
+The visual bug is caused by **`overflow: hidden` on container CSS classes combined with `box-sizing: border-box` and explicit borders**:
+
+- CSS classes `.ctrl-panel`, `.ctrl-tabpage`, `.ctrl-splitcontainer`, `.ctrl-flowlayoutpanel`, `.ctrl-tablelayoutpanel` all have `overflow: hidden` and `border: 1px dashed #bbb`
+- With `box-sizing: border-box`, a container specified at `width: 260px` has a CSS content/padding area of only 258px (after subtracting 2×1px borders)
+- WinForms `Location` coordinates are relative to the parent's **client area** (inside the border), so a child at `Location.X = 258` is valid in WinForms but maps to `left: 258px` in CSS, placing it exactly at the overflow clipping boundary
+- Controls near or at the edge of their parent container can be partially or fully clipped (invisible) in the browser preview
+
+**Secondary issue:** The `<fieldset class="native-groupbox">` element has no explicit `background: transparent`. Some browser UA stylesheets render `<fieldset>` with a non-transparent background that can obscure child controls rendered after it in the DOM.
+
+**Fix:** Change `overflow: hidden` → `overflow: visible` on all container CSS classes; add `background: transparent` to `.native-groupbox`. These changes ensure all child controls are always visible in the design preview, regardless of their exact coordinates relative to the parent boundary.
+
 ### Suspected Root Causes (to be confirmed by failing test)
 
 The bug likely manifests as one or more of the following:

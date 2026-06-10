@@ -4,7 +4,7 @@ Instructions for AI coding agents working on this repository.
 
 ## Project Overview
 
-This is an **MCP (Model Context Protocol) server** written in C# / .NET 10 that parses and manipulates WinForms
+This is an **MCP (Model Context Protocol) server** written in C# / .NET 8 that parses and manipulates WinForms
 `.Designer.cs` and `.Designer.vb` files. It uses the **stdio** transport and is consumed by MCP clients like
 Claude Desktop, VS Code Copilot, or MCP Inspector.
 
@@ -134,7 +134,7 @@ Each MCP tool should have a matching CLI subcommand in `Cli/CliCommands.cs`:
   `.Services.VisualBasic`, `.Tools` sub-namespaces.
 - **Nullable**: enabled project-wide.
 - **Implicit usings**: enabled.
-- **Target**: `net10.0`.
+- **Target**: `net8.0`.
 - **No `this.` or `Me.` in C# code** - the project uses implicit member access.
 - **C# and VB.NET parity**: any parsing/writing feature should work for both languages. If you change one
   parser, apply the equivalent change to the other.

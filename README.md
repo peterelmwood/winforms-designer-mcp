@@ -7,7 +7,7 @@ MCP-compatible client (Claude Desktop, VS Code Copilot, MCP Inspector, etc.) can
 
 ## Prerequisites
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download) or later
+- [.NET 8 SDK](https://dotnet.microsoft.com/download) or later
 
 ## Quick Start
 
@@ -288,7 +288,7 @@ AGENTS.md                               # Agent instructions for AI coding assis
 src/
   winforms-designer-mcp/                # Main project
     Program.cs                          # MCP server / CLI entry point
-    winforms-designer-mcp.csproj        # Project file (.NET 10 tool)
+    winforms-designer-mcp.csproj        # Project file (.NET 8 tool)
     Cli/
       CliCommands.cs                    # CLI subcommands mapping 1:1 to MCP tools
     Models/

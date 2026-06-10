@@ -82,8 +82,10 @@ namespace WinFormsDesignerMcp.Services.VisualBasic
                 }
             }
 
-            // Phase 1: Extract control declarations (Me.X = New Type()).
+            // Phase 1: Extract control declarations (Me.X = New Type()) and local variable
+            // declarations (e.g. ComponentResourceManager).
             var controlsByName = new Dictionary<string, ControlNode>(StringComparer.OrdinalIgnoreCase);
+            var localDeclarations = new List<string>();
             foreach (var stmt in statements)
             {
                 if (
@@ -93,16 +95,25 @@ namespace WinFormsDesignerMcp.Services.VisualBasic
                 {
                     controlsByName[name] = new ControlNode { Name = name, ControlType = typeName };
                 }
+                else if (stmt is LocalDeclarationStatementSyntax)
+                {
+                    localDeclarations.Add(stmt.ToString().Trim());
+                }
             }
 
-            // Phase 2: Extract property assignments, Controls.Add calls, and event wiring.
+            // Phase 2: Extract property assignments, Controls.Add calls, event wiring, and
+            // unrecognized invocations (e.g. resources.ApplyResources).
             var formProperties = new Dictionary<string, string>();
             var formEvents = new List<EventWiring>();
+            var formRawStatements = new List<string>();
             var parentChildMap = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
             parentChildMap["$form"] = [];
 
             foreach (var stmt in statements)
             {
+                // Each branch uses `continue` after a successful match so that a statement that is
+                // handled by one pattern is never also passed to the raw-statement fallback.
+
                 // Property assignment
                 if (TryParsePropertyAssignment(stmt, out var target, out var propName, out var value))
                 {
@@ -114,6 +125,7 @@ namespace WinFormsDesignerMcp.Services.VisualBasic
                     {
                         control.Properties[propName] = value;
                     }
+                    continue;
                 }
 
                 // Controls.Add
@@ -127,6 +139,7 @@ namespace WinFormsDesignerMcp.Services.VisualBasic
                     }
 
                     children.Add(childName);
+                    continue;
                 }
 
                 // AddHandler event wiring
@@ -140,6 +153,21 @@ namespace WinFormsDesignerMcp.Services.VisualBasic
                     else if (controlsByName.TryGetValue(evtTarget, out var ctrl))
                     {
                         ctrl.Events.Add(wiring);
+                    }
+                    continue;
+                }
+
+                // Unrecognized invocations (e.g. resources.ApplyResources): attribute to a control
+                // if possible, otherwise store at form level.
+                if (TryParseRawStatement(stmt, controlsByName, out var rawTarget, out var rawText))
+                {
+                    if (rawTarget is null)
+                    {
+                        formRawStatements.Add(rawText);
+                    }
+                    else if (controlsByName.TryGetValue(rawTarget, out var ctrl))
+                    {
+                        ctrl.RawStatements.Add(rawText);
                     }
                 }
             }
@@ -163,6 +191,8 @@ namespace WinFormsDesignerMcp.Services.VisualBasic
                 FormEvents = formEvents,
                 Controls = controlsByName.Values.ToList(),
                 RootControls = rootControls,
+                LocalDeclarations = localDeclarations,
+                FormRawStatements = formRawStatements,
             };
         }
 
@@ -415,6 +445,84 @@ namespace WinFormsDesignerMcp.Services.VisualBasic
             {
                 handlerName = directHandler.Name.Identifier.Text;
                 return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Try to attribute an unrecognized invocation statement to a control (or form level).
+        /// Matches calls whose first argument is <c>Me.controlName</c> or <c>Me</c>,
+        /// e.g. <c>resources.ApplyResources(Me.button1, "button1")</c>.
+        /// Skips layout-management calls that the writer regenerates automatically.
+        /// </summary>
+        private static bool TryParseRawStatement(
+            StatementSyntax statement,
+            IReadOnlyDictionary<string, ControlNode> controls,
+            out string? targetControl,
+            out string rawText
+        )
+        {
+            targetControl = null;
+            rawText = "";
+
+            InvocationExpressionSyntax? invocation = null;
+
+            if (
+                statement is ExpressionStatementSyntax exprStmt
+                && exprStmt.Expression is InvocationExpressionSyntax inv1
+            )
+            {
+                invocation = inv1;
+            }
+            else if (
+                statement is CallStatementSyntax callStmt
+                && callStmt.Invocation is InvocationExpressionSyntax inv2
+            )
+            {
+                invocation = inv2;
+            }
+
+            if (invocation is null)
+            {
+                return false;
+            }
+
+            // Skip layout-management calls that the writer already emits.
+            if (invocation.Expression is MemberAccessExpressionSyntax methodAccess)
+            {
+                var methodName = methodAccess.Name.Identifier.Text;
+                if (methodName is "SuspendLayout" or "ResumeLayout" or "PerformLayout"
+                               or "BeginInit" or "EndInit")
+                {
+                    return false;
+                }
+            }
+
+            // Try to attribute by the first argument: Me.controlName → control, Me → form level.
+            if (invocation.ArgumentList is not null && invocation.ArgumentList.Arguments.Count >= 1)
+            {
+                var firstArg = invocation.ArgumentList.Arguments[0].GetExpression();
+
+                if (
+                    firstArg is MemberAccessExpressionSyntax argAccess
+                    && argAccess.Expression is MeExpressionSyntax
+                )
+                {
+                    var controlName = argAccess.Name.Identifier.Text;
+                    if (controls.ContainsKey(controlName))
+                    {
+                        targetControl = controlName;
+                        rawText = statement.ToString().Trim();
+                        return true;
+                    }
+                }
+                else if (firstArg is MeExpressionSyntax)
+                {
+                    targetControl = null;
+                    rawText = statement.ToString().Trim();
+                    return true;
+                }
             }
 
             return false;

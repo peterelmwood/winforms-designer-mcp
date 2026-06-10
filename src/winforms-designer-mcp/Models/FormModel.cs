@@ -46,4 +46,17 @@ public class FormModel
     /// This is a subset of <see cref="Controls"/> organized hierarchically.
     /// </summary>
     public List<ControlNode> RootControls { get; set; } = [];
+
+    /// <summary>
+    /// Raw local variable declaration statements from the beginning of InitializeComponent(),
+    /// e.g. a ComponentResourceManager declaration. Preserved verbatim for round-trip fidelity.
+    /// </summary>
+    public List<string> LocalDeclarations { get; set; } = [];
+
+    /// <summary>
+    /// Raw invocation statements at the form level in InitializeComponent() that are not standard
+    /// property assignments, Controls.Add, or event wiring — e.g. resources.ApplyResources(this, ...).
+    /// Preserved verbatim for round-trip fidelity.
+    /// </summary>
+    public List<string> FormRawStatements { get; set; } = [];
 }

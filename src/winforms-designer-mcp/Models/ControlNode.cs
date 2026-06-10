@@ -37,4 +37,11 @@ public class ControlNode
     /// Events wired up in the designer for this control.
     /// </summary>
     public List<EventWiring> Events { get; set; } = [];
+
+    /// <summary>
+    /// Raw invocation statements in the per-control property block that are not standard
+    /// property assignments, Controls.Add, or event wiring — e.g. resources.ApplyResources()
+    /// calls. Preserved verbatim for round-trip fidelity.
+    /// </summary>
+    public List<string> RawStatements { get; set; } = [];
 }

@@ -74,8 +74,10 @@ public class CSharpDesignerFileParser : IDesignerFileParser
             }
         }
 
-        // Phase 1: Extract control declarations (this.x = new Type()).
+        // Phase 1: Extract control declarations (this.x = new Type()) and local variable
+        // declarations (e.g. ComponentResourceManager).
         var controlsByName = new Dictionary<string, ControlNode>(StringComparer.OrdinalIgnoreCase);
+        var localDeclarations = new List<string>();
         foreach (var stmt in statements)
         {
             if (
@@ -85,17 +87,26 @@ public class CSharpDesignerFileParser : IDesignerFileParser
             {
                 controlsByName[name] = new ControlNode { Name = name, ControlType = typeName };
             }
+            else if (stmt is LocalDeclarationStatementSyntax)
+            {
+                localDeclarations.Add(stmt.ToString().Trim());
+            }
         }
 
-        // Phase 2: Extract property assignments, Controls.Add calls, and event wiring.
+        // Phase 2: Extract property assignments, Controls.Add calls, event wiring, and
+        // unrecognized invocations (e.g. resources.ApplyResources).
         var formProperties = new Dictionary<string, string>();
         var formEvents = new List<EventWiring>();
+        var formRawStatements = new List<string>();
         var parentChildMap = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         // "form" as the key for controls added to this.Controls
         parentChildMap["$form"] = [];
 
         foreach (var stmt in statements)
         {
+            // Each branch uses `continue` after a successful match so that a statement that is
+            // handled by one pattern is never also passed to the raw-statement fallback.
+
             // Property assignment: this.controlName.Property = value
             if (TryParsePropertyAssignment(stmt, out var target, out var propName, out var value))
             {
@@ -108,6 +119,7 @@ public class CSharpDesignerFileParser : IDesignerFileParser
                 {
                     control.Properties[propName] = value;
                 }
+                continue;
             }
 
             // Controls.Add: this.panel1.Controls.Add(this.button1) or this.Controls.Add(...)
@@ -121,12 +133,18 @@ public class CSharpDesignerFileParser : IDesignerFileParser
                 }
 
                 children.Add(childName);
+                continue;
             }
 
             // Event wiring: this.button1.Click += new EventHandler(this.button1_Click)
-            if (TryParseEventWiring(stmt, out var evtTarget, out var evtName, out var handler))
+            if (TryParseEventWiring(stmt, out var evtTarget, out var evtName, out var handler, out var delegateTypeName))
             {
-                var wiring = new EventWiring { EventName = evtName, HandlerMethodName = handler };
+                var wiring = new EventWiring
+                {
+                    EventName = evtName,
+                    HandlerMethodName = handler,
+                    DelegateTypeName = delegateTypeName
+                };
                 if (
                     evtTarget is null
                     || evtTarget.Equals("this", StringComparison.OrdinalIgnoreCase)
@@ -137,6 +155,21 @@ public class CSharpDesignerFileParser : IDesignerFileParser
                 else if (controlsByName.TryGetValue(evtTarget, out var ctrl))
                 {
                     ctrl.Events.Add(wiring);
+                }
+                continue;
+            }
+
+            // Unrecognized invocations (e.g. resources.ApplyResources): attribute to a control
+            // if possible, otherwise store at form level.
+            if (TryParseRawStatement(stmt, controlsByName, out var rawTarget, out var rawText))
+            {
+                if (rawTarget is null)
+                {
+                    formRawStatements.Add(rawText);
+                }
+                else if (controlsByName.TryGetValue(rawTarget, out var ctrl))
+                {
+                    ctrl.RawStatements.Add(rawText);
                 }
             }
         }
@@ -161,6 +194,8 @@ public class CSharpDesignerFileParser : IDesignerFileParser
             FormEvents = formEvents,
             Controls = controlsByName.Values.ToList(),
             RootControls = rootControls,
+            LocalDeclarations = localDeclarations,
+            FormRawStatements = formRawStatements,
         };
     }
 
@@ -360,11 +395,13 @@ public class CSharpDesignerFileParser : IDesignerFileParser
         StatementSyntax statement,
         out string? targetControl,
         out string eventName,
-        out string handlerName
+        out string handlerName,
+        out string? delegateTypeName
     )
     {
         targetControl = null;
         eventName = handlerName = "";
+        delegateTypeName = null;
 
         if (
             statement
@@ -406,12 +443,13 @@ public class CSharpDesignerFileParser : IDesignerFileParser
         // Right side: new EventHandler(this.handler) or this.handler
         var rightExpr = assignment.Right;
 
-        // Unwrap: new EventHandler(this.handler_Click)
+        // Unwrap: new SomeDelegateType(this.handler_Click) — capture the delegate type name
         if (
             rightExpr is ObjectCreationExpressionSyntax delegateCreation
             && delegateCreation.ArgumentList?.Arguments.Count == 1
         )
         {
+            delegateTypeName = delegateCreation.Type.ToString();
             rightExpr = delegateCreation.ArgumentList.Arguments[0].Expression;
         }
 
@@ -427,6 +465,71 @@ public class CSharpDesignerFileParser : IDesignerFileParser
         {
             handlerName = handlerIdent.Identifier.Text;
             return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Try to attribute an unrecognized invocation statement to a control (or form level).
+    /// Matches calls whose first argument is <c>this.controlName</c> or <c>this</c>,
+    /// e.g. <c>resources.ApplyResources(this.button1, "button1")</c>.
+    /// Skips layout-management calls that the writer regenerates automatically.
+    /// </summary>
+    private static bool TryParseRawStatement(
+        StatementSyntax statement,
+        IReadOnlyDictionary<string, ControlNode> controls,
+        out string? targetControl,
+        out string rawText
+    )
+    {
+        targetControl = null;
+        rawText = "";
+
+        if (
+            statement
+            is not ExpressionStatementSyntax { Expression: InvocationExpressionSyntax invocation }
+        )
+        {
+            return false;
+        }
+
+        // Skip layout-management calls that the writer already emits.
+        if (invocation.Expression is MemberAccessExpressionSyntax methodAccess)
+        {
+            var methodName = methodAccess.Name.Identifier.Text;
+            if (methodName is "SuspendLayout" or "ResumeLayout" or "PerformLayout"
+                           or "BeginInit" or "EndInit")
+            {
+                return false;
+            }
+        }
+
+        // Try to attribute by the first argument: this.controlName → control, this → form level.
+        if (invocation.ArgumentList.Arguments.Count >= 1)
+        {
+            var firstArg = invocation.ArgumentList.Arguments[0].Expression;
+
+            if (
+                firstArg is MemberAccessExpressionSyntax argAccess
+                && argAccess.Expression is ThisExpressionSyntax
+            )
+            {
+                var controlName = argAccess.Name.Identifier.Text;
+                if (controls.ContainsKey(controlName))
+                {
+                    targetControl = controlName;
+                    rawText = statement.ToString().Trim();
+                    return true;
+                }
+            }
+            else if (firstArg is ThisExpressionSyntax)
+            {
+                // Form-level raw statement.
+                targetControl = null;
+                rawText = statement.ToString().Trim();
+                return true;
+            }
         }
 
         return false;

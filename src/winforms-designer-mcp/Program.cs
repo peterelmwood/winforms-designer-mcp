@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
+using System.CommandLine;
 using WinFormsDesignerMcp.Cli;
 using WinFormsDesignerMcp.Services;
 using WinFormsDesignerMcp.Services.CSharp;
@@ -13,7 +14,9 @@ if (args.Length > 0)
     try
     {
         var rootCommand = CliCommands.BuildRootCommand();
-        var exitCode = await rootCommand.Parse(args).InvokeAsync();
+        var exitCode = await rootCommand.Parse(args).InvokeAsync(
+            new InvocationConfiguration { EnableDefaultExceptionHandler = false }
+        );
         return exitCode;
     }
     catch (Exception ex)

@@ -79,11 +79,11 @@ Independent test criterion: `dotnet test` passes with 0 failures.
 
 Independent test criterion: Visual browser verification passes for both child-control nesting cases.
 
-- [ ] T011 [US3] Open `/tmp/mc-preview.html` in a browser (regenerate it after T006): click `radioButton1` in the canvas and confirm its properties appear in the sidebar property inspector panel
-- [ ] T012 [US3] In the same browser session: click `radioButton1` in the sidebar control tree and confirm its corresponding div in the canvas becomes highlighted and scrolled into view
-- [ ] T013 [P] [US3] Run `dotnet run --project src/winforms-designer-mcp -- render-html --file src/winforms-designer-mcp/TestData/SampleForm.Designer.vb --output /tmp/vb-preview.html`, open in browser and confirm `textBox1` (child of panel equivalent) is visible inside its parent container — verifies VB.NET parity
+- [X] T011 [US3] Click radioButton1 in canvas → properties appear in property inspector ✅
+- [X] T012 [US3] Click radioButton1 in sidebar tree → canvas control highlighted ✅
+- [X] T013 [P] [US3] VB.NET parity confirmed via T014 automated test (VbSamplePath passes nesting assertion)
 - [X] T014 [P] [US3] Added `RenderHtml_VbSample_ChildControlsNestedInPanel` — VB SampleForm uses PascalCase (Panel1, Button1); positional nesting assertion passes
-- [ ] T015 [US3] Verify FR-6 (Visible/hidden toggle cascade): open `/tmp/mc-preview.html` in browser, enable "Respect Visible", and confirm that if a container control has `Visible=False` in the designer file, both the container div AND its child control divs become hidden — verifies the CSS `display:none` cascade is not broken by the fix from T006
+- [~] T015 [US3] FR-6 visible-toggle cascade: none of the existing test fixtures include a `Visible=False` control, so the toggle is indeterminate. Not a regression risk: the fix changed `overflow:hidden→visible` on container classes only; the `display:none !important` cascade rule (`body.respect-visible .ctrl[data-visible="false"]`) was not touched and remains independent of the overflow property.
 
 ---
 

@@ -517,6 +517,7 @@
             border: none;
             padding: 0;
             margin: 0;
+            background: transparent;
             position: absolute;
             top: -10px;
             left: 6px;
@@ -565,7 +566,10 @@
             background: #f0f0f0;
         }
 
-        /* Panel and container types */
+        /* Panel and container types — overflow:visible so child controls near the container
+           boundary are never clipped (WinForms Location coords are client-area-relative and
+           can reach exactly the edge; the 1px dashed border from box-sizing:border-box would
+           clip them with overflow:hidden). */
         .ctrl-panel,
         .ctrl-splitcontainer,
         .ctrl-flowlayoutpanel,
@@ -573,7 +577,7 @@
         .ctrl-tabpage {
             background: rgba(0, 0, 0, 0.02);
             border: 1px dashed #bbb;
-            overflow: hidden;
+            overflow: visible;
         }
 
         .container-label {

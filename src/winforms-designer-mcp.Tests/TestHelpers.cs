@@ -18,6 +18,14 @@ internal static class TestHelpers
         Path.Combine(AppContext.BaseDirectory, "TestData", "SampleForm.Designer.vb");
 
     /// <summary>
+    /// Path to the complex multi-control test fixture sourced from the dotnet/winforms
+    /// integration test suite (MIT). Contains 3-level nesting: TabControl→TabPage→leaf,
+    /// and GroupBox→RadioButton nesting.
+    /// </summary>
+    public static string MultipleControlsPath =>
+        Path.Combine(AppContext.BaseDirectory, "TestData", "MultipleControls.Designer.cs");
+
+    /// <summary>
     /// Create a <see cref="DesignerFileService"/> without DI, just like the CLI does.
     /// </summary>
     public static DesignerFileService CreateService() =>

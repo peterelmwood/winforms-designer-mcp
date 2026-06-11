@@ -121,6 +121,12 @@ public class VbDesignerFileWriter : IDesignerFileWriter
     {
         var sb = new StringBuilder();
 
+        // Local variable declarations (e.g. ComponentResourceManager).
+        foreach (var decl in model.LocalDeclarations)
+        {
+            sb.AppendLine($"{indent}{decl}");
+        }
+
         // Control instantiations.
         foreach (var control in model.Controls)
         {
@@ -141,6 +147,10 @@ public class VbDesignerFileWriter : IDesignerFileWriter
             sb.AppendLine($"{indent}'");
             sb.AppendLine($"{indent}'{control.Name}");
             sb.AppendLine($"{indent}'");
+            foreach (var rawStmt in control.RawStatements)
+            {
+                sb.AppendLine($"{indent}{rawStmt}");
+            }
             foreach (var (propName, value) in control.Properties)
             {
                 sb.AppendLine($"{indent}Me.{control.Name}.{propName} = {value}");
@@ -159,6 +169,10 @@ public class VbDesignerFileWriter : IDesignerFileWriter
         sb.AppendLine($"{indent}'");
         sb.AppendLine($"{indent}'{model.FormName}");
         sb.AppendLine($"{indent}'");
+        foreach (var rawStmt in model.FormRawStatements)
+        {
+            sb.AppendLine($"{indent}{rawStmt}");
+        }
         foreach (var (propName, value) in model.FormProperties)
         {
             sb.AppendLine($"{indent}Me.{propName} = {value}");

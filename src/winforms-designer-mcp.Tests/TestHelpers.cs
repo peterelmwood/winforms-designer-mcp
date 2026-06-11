@@ -26,6 +26,12 @@ internal static class TestHelpers
         Path.Combine(AppContext.BaseDirectory, "TestData", "MultipleControls.Designer.cs");
 
     /// <summary>
+    /// Path to the test fixture with ComponentResourceManager and typed event-handler delegates.
+    /// </summary>
+    public static string ResourcesFormPath =>
+        Path.Combine(AppContext.BaseDirectory, "TestData", "ResourcesForm.Designer.cs");
+
+    /// <summary>
     /// Create a <see cref="DesignerFileService"/> without DI, just like the CLI does.
     /// </summary>
     public static DesignerFileService CreateService() =>

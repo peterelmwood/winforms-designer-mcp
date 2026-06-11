@@ -143,6 +143,12 @@ public class CSharpDesignerFileWriter : IDesignerFileWriter
         var sb = new StringBuilder();
         sb.AppendLine();
 
+        // Local variable declarations (e.g. ComponentResourceManager).
+        foreach (var decl in model.LocalDeclarations)
+        {
+            sb.AppendLine($"{indent}{decl}");
+        }
+
         // Control instantiations.
         foreach (var control in model.Controls)
         {
@@ -163,6 +169,10 @@ public class CSharpDesignerFileWriter : IDesignerFileWriter
             sb.AppendLine($"{indent}// ");
             sb.AppendLine($"{indent}// {control.Name}");
             sb.AppendLine($"{indent}// ");
+            foreach (var rawStmt in control.RawStatements)
+            {
+                sb.AppendLine($"{indent}{rawStmt}");
+            }
             foreach (var (propName, value) in control.Properties)
             {
                 sb.AppendLine($"{indent}this.{control.Name}.{propName} = {value};");
@@ -173,7 +183,8 @@ public class CSharpDesignerFileWriter : IDesignerFileWriter
             }
             foreach (var evt in control.Events)
             {
-                sb.AppendLine($"{indent}this.{control.Name}.{evt.EventName} += new System.EventHandler(this.{evt.HandlerMethodName});");
+                var delegateType = evt.DelegateTypeName ?? "System.EventHandler";
+                sb.AppendLine($"{indent}this.{control.Name}.{evt.EventName} += new {delegateType}(this.{evt.HandlerMethodName});");
             }
         }
 
@@ -181,6 +192,10 @@ public class CSharpDesignerFileWriter : IDesignerFileWriter
         sb.AppendLine($"{indent}// ");
         sb.AppendLine($"{indent}// {model.FormName}");
         sb.AppendLine($"{indent}// ");
+        foreach (var rawStmt in model.FormRawStatements)
+        {
+            sb.AppendLine($"{indent}{rawStmt}");
+        }
         foreach (var (propName, value) in model.FormProperties)
         {
             sb.AppendLine($"{indent}this.{propName} = {value};");
@@ -195,7 +210,8 @@ public class CSharpDesignerFileWriter : IDesignerFileWriter
         // Form event wiring.
         foreach (var evt in model.FormEvents)
         {
-            sb.AppendLine($"{indent}this.{evt.EventName} += new System.EventHandler(this.{evt.HandlerMethodName});");
+            var delegateType = evt.DelegateTypeName ?? "System.EventHandler";
+            sb.AppendLine($"{indent}this.{evt.EventName} += new {delegateType}(this.{evt.HandlerMethodName});");
         }
 
         // ResumeLayout calls.
